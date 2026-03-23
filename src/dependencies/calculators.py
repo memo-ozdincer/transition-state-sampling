@@ -114,16 +114,15 @@ def _lj_energy_forces_hessian(
     r_hat = r_vec / r.unsqueeze(-1).clamp(min=1e-12)  # (N, N, 3)
 
     # Off-diagonal 3x3 blocks H_{ij} (i != j):
-    # H_{ij,ab} = d²E/(dx_{ia} dx_{jb})
-    #           = [d²V/dr² - (1/r)*dV/dr] * r_hat_a * r_hat_b + (1/r)*dV/dr * delta_ab
-    # But since r_ij = |x_j - x_i| and dr/dx_{ia} = -(x_ja - x_ia)/r = -r_hat_a,
-    # dr/dx_{jb} = +r_hat_b:
-    # H_{ij,ab} = (d²V/dr² - dV/(r*dr)) * r_hat_a * r_hat_b + dV/(r*dr) * delta_ab
+    # H_{ij,ab} = d²E/(dx_{ia} dx_{jb}) = -dF_{ia}/dx_{jb}
     #
-    # For the off-diagonal block d²(0.5*sum V)/dx_i dx_j with i!=j:
-    # = (d2Vdr2 - dVdr/r) * rhat_a * rhat_b + (dVdr/r) * delta_ab
-    # (sign: dr/dx_{ia} = -(rhat_a), dr/dx_{jb} = +(rhat_b), so the product is -rhat_a*rhat_b,
-    # but the double negative from the chain rule gives positive.)
+    # Chain rule (r_ij = |x_j - x_i|, dr/dx_{ia} = -r_hat_a, dr/dx_{jb} = +r_hat_b):
+    # d²V/dx_{ia}dx_{jb} = d²V/dr² * (-r_hat_a)(+r_hat_b) + dV/dr * d²r/dx_{ia}dx_{jb}
+    #   where d²r/dx_{ia}dx_{jb} = -(delta_ab - r_hat_a*r_hat_b)/r
+    # => d²V/dx_{ia}dx_{jb} = -(d²V/dr² - dV/dr/r)*r_hat_a*r_hat_b - (dV/dr/r)*delta_ab
+    #
+    # With E = (1/2)*sum_{i≠j} V (double-counted): H_{ij,ab} = d²V(r_ij)/dx_{ia}dx_{jb}
+    # => H_blocks[i,j,a,b] = -(A_ij*r_hat_a*r_hat_b + B_ij*delta_ab)
 
     A_ij = (d2Vdr2 - dVdr / r)  # (N, N)  coefficient of outer product
     B_ij = dVdr / r              # (N, N)  coefficient of identity
@@ -133,8 +132,8 @@ def _lj_energy_forces_hessian(
     rhat_outer = torch.einsum("ija,ijb->ijab", r_hat, r_hat)  # (N, N, 3, 3)
     I3 = torch.eye(3, dtype=dtype, device=device)
 
-    H_blocks = A_ij.unsqueeze(-1).unsqueeze(-1) * rhat_outer + \
-               B_ij.unsqueeze(-1).unsqueeze(-1) * I3.unsqueeze(0).unsqueeze(0)
+    H_blocks = -(A_ij.unsqueeze(-1).unsqueeze(-1) * rhat_outer +
+                 B_ij.unsqueeze(-1).unsqueeze(-1) * I3.unsqueeze(0).unsqueeze(0))
     # Zero out diagonal blocks (i==i) — will be filled by negative row sum
     diag_mask = torch.eye(N, dtype=torch.bool, device=device)
     H_blocks[diag_mask] = 0.0
@@ -182,8 +181,17 @@ def make_lj_predict_fn(
                 "LJ backend uses analytical derivatives; use require_grad=False"
             )
 
-        coords_2d = coords.detach().reshape(-1, 3)
+        # Always compute in float64: LJ Hessian condition numbers can span many
+        # orders of magnitude, and float32 causes linalg.eigh to fail (error 28).
+        # Energy and forces are cast back to the caller's dtype; the Hessian is
+        # kept as float64 so the optimizer's eigh call is numerically stable.
+        orig_dtype = coords.dtype
+        coords_2d = coords.detach().reshape(-1, 3).double()
         result = _lj_energy_forces_hessian(coords_2d, atomic_nums.detach(), sigma_scale)
+
+        result["energy"] = result["energy"].to(orig_dtype)
+        result["forces"] = result["forces"].to(orig_dtype)
+        # hessian intentionally left as float64
 
         if not do_hessian:
             result.pop("hessian", None)
