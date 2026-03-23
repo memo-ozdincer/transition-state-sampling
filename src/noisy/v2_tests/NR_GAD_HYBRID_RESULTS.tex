@@ -1,0 +1,319 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{makecell}
+
+\geometry{margin=1in}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+\newcommand{\vect}[1]{\mathbf{#1}}
+\newcommand{\mat}[1]{\mathbf{#1}}
+\newcommand{\Real}{\mathbb{R}}
+\newcommand{\pes}{\mathcal{V}}
+\newcommand{\grad}{\nabla}
+\newcommand{\hess}{\mat{H}}
+\newcommand{\evec}{\vect{v}}
+\newcommand{\eval}{\lambda}
+\newcommand{\angstrom}{\text{\r{A}}}
+
+\title{Hybrid NR$\to$GAD Transition State Search:\\
+Running Results and Analysis}
+
+\author{Compiled from smoke tests \& full-scale experiments\\
+\texttt{ts-tools / src/noisy/v2\_tests/}}
+
+\date{March 2026 (living document)}
+
+\begin{document}
+\maketitle
+
+%=============================================================================
+\section*{Executive Summary}
+%=============================================================================
+
+We implement a two-phase ``iHiSD-inspired'' optimizer that chains
+Newton--Raphson (NR) minimization with Gentlest Ascent Dynamics (GAD)
+saddle-point search.  The goal: given a noisy geometry near a transition
+state, first descend to a local minimum, then climb from that minimum back
+to an index-1 saddle (the TS).
+
+\begin{itemize}[nosep]
+  \item \textbf{Phase 1 --- NR minimization} (v13, all bells and whistles):
+        drives Morse index to 0 and forces below $10^{-4}$~eV/$\angstrom$.
+  \item \textbf{Phase 2 --- GAD saddle search}: climbs along the softest
+        eigenvector until $\eval_0 \times \eval_1 < -\epsilon$.
+  \item Two GAD variants tested: \textbf{path} (trust-region, full feature set)
+        and \textbf{nopath} (state-based, Markovian --- suitable for generative modelling).
+\end{itemize}
+
+\medskip
+\noindent\textbf{Key bug fix (2026-03-23):}
+\texttt{ParallelSCINEProcessor} uses \texttt{mp.get\_context("spawn")},
+so child workers re-import the module and get empty default parameter dicts.
+Fixed by threading all params through the payload tuple (commit \texttt{6e0fc88}).
+
+%=============================================================================
+\section{Experiment Design}
+\label{sec:design}
+%=============================================================================
+
+\subsection{Experiment 1: Path-based GAD (full feature set)}
+
+Full v13 NR (RFO + PLS + kicks + late escape) followed by path-based
+trust-region GAD.
+
+\begin{center}
+\begin{tabular}{clccl}
+\toprule
+\# & Config & NR steps & GAD steps & Notes \\
+\midrule
+1a--d & Full v13 + path GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
+1e & Same + \texttt{--gad-on-nr-failure} & 50k & 20k & $\sigma = 2.0$, rescue mode \\
+1f & GAD-only (NR 0 steps) & 0 & 20k & $\sigma = 2.0$, control \\
+1g & Shorter NR + GAD & 20k & 20k & $\sigma = 2.0$, budget ablation \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Experiment 2: Nopath GAD (Markovian, for generative modelling)}
+
+Simplified v13 NR (RFO + PLS, \emph{no} kicks/history) followed by
+state-based GAD with eigenvalue-clamped $dt$ adaptation.
+
+\begin{center}
+\begin{tabular}{clccl}
+\toprule
+\# & Config & NR steps & GAD steps & Notes \\
+\midrule
+2a--d & Simplified NR + nopath GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
+2e & Shorter NR + nopath GAD & 20k & 20k & $\sigma = 2.0$, budget ablation \\
+2f & GAD-only (NR 0 steps) & 0 & 20k & $\sigma = 2.0$, control \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Experiment 3: Full v13 NR (95\%+ convergence) $\to$ GAD from minimum}
+
+The ``proper'' two-phase approach: run the full v13 NR (all kicks, late escape,
+50k steps --- the config that achieves 95--98\% convergence) to completion,
+\emph{then} GAD from the converged minimum.  Most samples = ``find the minimum,
+then find TS from the minimum.''  Both GAD variants tested head-to-head from
+identical NR-converged starting points.
+
+\begin{center}
+\begin{tabular}{clccl}
+\toprule
+\# & Config & NR steps & GAD steps & Notes \\
+\midrule
+3a--d & Full v13 + path GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
+3e--h & Full v13 + nopath GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
+3i & Full v13 + path GAD + rescue & 50k & 20k & $\sigma = 2.0$ \\
+3j & Full v13 + nopath GAD + rescue & 50k & 20k & $\sigma = 2.0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%=============================================================================
+\section{Smoke Test Results (2026-03-23)}
+\label{sec:smoke}
+%=============================================================================
+
+All smoke tests run on \texttt{tri0107} (reserved compute node), DFTB0
+functional, 4 workers $\times$ 4 threads each.
+
+\subsection{Path variant}
+
+\begin{center}
+\begin{tabular}{lccccccc}
+\toprule
+Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Errors \\
+\midrule
+Smoke 1 (no rescue) & 5 & 100 & 100 & 0 & 0 & 0 & 0 \\
+Smoke 2 (+rescue) & 3 & 100 & 100 & 0 & 3 & 1 (33\%) & 0 \\
+Medium scale & 20 & 1000 & 1000 & 11 (55\%) & 11 & 6 (30\%) & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[nosep]
+  \item NR convergence at 1000 steps: 55\%, mean converged step = 346.
+  \item GAD TS rate given NR converged: 54.5\% (6/11), mean GAD steps to TS: 12.
+  \item GAD finds TS \emph{very} quickly once NR provides a good minimum.
+  \item 9 ``errors'' in medium test = NR-failed samples where GAD was skipped
+        (rescue mode off).
+\end{itemize}
+
+\subsection{Nopath variant}
+
+\begin{center}
+\begin{tabular}{lccccccc}
+\toprule
+Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Errors \\
+\midrule
+Smoke 3 (+rescue) & 3 & 100 & 100 & 0 & 3 & 2 (67\%) & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[nosep]
+  \item Nopath GAD found TS in 2 steps on average (2/3 samples).
+  \item Small sample size --- directional only, not statistically significant.
+\end{itemize}
+
+\subsection{Edge cases}
+
+\begin{center}
+\begin{tabular}{lccccccc}
+\toprule
+Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Mean GAD steps \\
+\midrule
+NR=0, path, $\sigma$=1.0 & 3 & 0 & 500 & 0 & 3 & 2 (67\%) & 58 \\
+NR=0, nopath, $\sigma$=1.0 & 3 & 0 & 500 & 0 & 3 & 1 (33\%) & 397 \\
+$\sigma$=2.0, path, 1k+1k & 10 & 1000 & 1000 & 3 (30\%) & 3 & 1 (10\%) & 10 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[nosep]
+  \item NR 0-step edge case works cleanly for both GAD variants (no errors).
+  \item High noise ($\sigma = 2.0$) at 1000 NR steps: only 30\% NR convergence,
+        confirming that 50k steps and kicks are essential at high noise.
+\end{itemize}
+
+\subsection{Experiment 3 smoke test: full v13 NR $\to$ GAD}
+
+\begin{center}
+\begin{tabular}{lccccccc}
+\toprule
+Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Mean GAD steps \\
+\midrule
+Full v13, path, $\sigma$=1.0 & 10 & 5000 & 1000 & 10 (100\%) & 10 & 3 (30\%) & 22 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[nosep]
+  \item \textbf{NR: 100\% convergence} (10/10) with full v13 kicks at 5k steps, mean 1316 steps.
+  \item \textbf{GAD: 30\% TS rate} (3/10) in 1000 GAD steps --- the 7 failures are the
+        ``GAD stuck at minimum'' case where GAD must first create a negative eigenvalue
+        by climbing from a true minimum. 1000 steps is insufficient; the full run uses 20k.
+  \item When GAD \emph{does} converge, it is fast: mean 22 steps.
+  \item This confirms the two-phase picture works. The open question is whether 20k GAD
+        steps is enough to escape the minimum basin for the remaining 70\%.
+\end{itemize}
+
+%=============================================================================
+\section{Full-Scale Results}
+\label{sec:full}
+%=============================================================================
+
+SLURM jobs submitted 2026-03-23:
+\begin{itemize}[nosep]
+  \item Experiment 1 (path): job \texttt{1222010}, 300 samples, 20h budget
+  \item Experiment 2 (nopath): job \texttt{1222011}, 300 samples, 16h budget
+  \item Experiment 3 (full v13 $\to$ GAD): job \texttt{1222145}, 300 samples, 24h budget
+\end{itemize}
+
+Status: \textbf{PENDING} (cluster maintenance reservation).
+
+\medskip
+\noindent\emph{Results will be filled in as jobs complete.}
+
+\subsection{Experiment 1: Path-based GAD}
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+Config & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
+\midrule
+1a & 0.5 & --- & --- & --- & --- & --- \\
+1b & 1.0 & --- & --- & --- & --- & --- \\
+1c & 1.5 & --- & --- & --- & --- & --- \\
+1d & 2.0 & --- & --- & --- & --- & --- \\
+1e (rescue) & 2.0 & --- & --- & --- & --- & --- \\
+1f (GAD only) & 2.0 & n/a & --- & n/a & n/a & --- \\
+1g (20k NR) & 2.0 & --- & --- & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Experiment 2: Nopath GAD (Markovian)}
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+Config & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
+\midrule
+2a & 0.5 & --- & --- & --- & --- & --- \\
+2b & 1.0 & --- & --- & --- & --- & --- \\
+2c & 1.5 & --- & --- & --- & --- & --- \\
+2d & 2.0 & --- & --- & --- & --- & --- \\
+2e (20k NR) & 2.0 & --- & --- & --- & --- & --- \\
+2f (GAD only) & 2.0 & n/a & --- & n/a & n/a & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Experiment 3: Full v13 NR $\to$ GAD (both variants)}
+
+\begin{center}
+\begin{tabular}{llcccccc}
+\toprule
+Config & GAD variant & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
+\midrule
+3a & path & 0.5 & --- & --- & --- & --- & --- \\
+3b & path & 1.0 & --- & --- & --- & --- & --- \\
+3c & path & 1.5 & --- & --- & --- & --- & --- \\
+3d & path & 2.0 & --- & --- & --- & --- & --- \\
+3e & nopath & 0.5 & --- & --- & --- & --- & --- \\
+3f & nopath & 1.0 & --- & --- & --- & --- & --- \\
+3g & nopath & 1.5 & --- & --- & --- & --- & --- \\
+3h & nopath & 2.0 & --- & --- & --- & --- & --- \\
+3i (rescue) & path & 2.0 & --- & --- & --- & --- & --- \\
+3j (rescue) & nopath & 2.0 & --- & --- & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%=============================================================================
+\section{Key Questions to Answer}
+\label{sec:questions}
+%=============================================================================
+
+\begin{enumerate}[nosep]
+  \item \textbf{Does NR convergence help GAD?}
+        Compare TS rate conditioned on NR convergence vs.\ unconditional.
+  \item \textbf{Can GAD rescue NR failures?}
+        Config 1e (rescue mode) vs.\ 1d (no rescue) at $\sigma = 2.0$.
+  \item \textbf{Does NR budget matter?}
+        Config 1g (20k NR) vs.\ 1d (50k NR) at $\sigma = 2.0$.
+  \item \textbf{GAD-only baseline:}
+        Config 1f/2f --- can GAD find TS from raw noisy geometry without NR?
+  \item \textbf{Path vs.\ nopath:}
+        Exp 1 vs.\ Exp 2 at each noise level.
+        Nopath uses simpler NR (no kicks) --- is the TS rate comparable?
+  \item \textbf{Noise sensitivity:}
+        How does TS rate degrade from $\sigma = 0.5$ to $2.0$?
+\end{enumerate}
+
+%=============================================================================
+\section{Analysis Notes}
+\label{sec:notes}
+%=============================================================================
+
+\emph{This section will be populated as results come in.}
+
+\end{document}

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(squeue -u memoozd)",
+      "Bash(sbatch /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/scripts/slurm_templates/reserve_node_6h.slurm)",
+      "Bash(squeue -u memoozd -j 1221710 --format=\"%.18i %.9P %.20j %.8u %.2t %.10M %.6D %R\")",
+      "Bash(ssh tri0107:*)"
+    ]
+  }
+}
