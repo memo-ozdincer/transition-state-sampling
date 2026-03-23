@@ -68,14 +68,65 @@ LJ provides a controlled generalization test with three key properties:
     than DFTB0, enabling rapid grid sweeps.
 \end{enumerate}
 
-\subsection{LJ parametrization}
+\subsection{LJ potential: definition and parametrization}
+\label{sec:lj-potential}
 
-To make Transition1x geometries (covalent bond lengths ${\sim}1.0$--$1.5$\,\AA)
-sit in valid LJ wells, we scale all UFF $\sigma$ values by $1/3$
-(\texttt{lj\_sigma\_scale\,=\,0.3333}).  This shrinks LJ equilibria from
-${\sim}3$--$4$\,\AA{} to ${\sim}1.0$--$1.3$\,\AA, matching covalent bond
-lengths.  Lorentz--Berthelot mixing rules are used:
-$\sigma_{ij} = (\sigma_i + \sigma_j)/2$, $\varepsilon_{ij} = \sqrt{\varepsilon_i \varepsilon_j}$.
+The Lennard-Jones potential is a pairwise sum over all atom pairs:
+\begin{equation}
+  V = \sum_{i<j} 4\,\varepsilon_{ij}
+      \left[\left(\frac{\sigma_{ij}}{r_{ij}}\right)^{12}
+            - \left(\frac{\sigma_{ij}}{r_{ij}}\right)^{6}\right],
+  \label{eq:lj}
+\end{equation}
+where $r_{ij} = \norm{\vect{x}_j - \vect{x}_i}$ is the interatomic distance.
+The gradient and Hessian are computed analytically (no finite differences,
+no SCF iteration):
+\begin{align}
+  \frac{\partial V}{\partial r_{ij}}
+    &= \frac{4\varepsilon_{ij}}{r_{ij}}
+       \left[-12\left(\frac{\sigma_{ij}}{r_{ij}}\right)^{12}
+             + 6\left(\frac{\sigma_{ij}}{r_{ij}}\right)^{6}\right],
+  \label{eq:lj-deriv} \\[4pt]
+  \frac{\partial^2 V}{\partial r_{ij}^2}
+    &= \frac{4\varepsilon_{ij}}{r_{ij}^2}
+       \left[156\left(\frac{\sigma_{ij}}{r_{ij}}\right)^{12}
+             - 42\left(\frac{\sigma_{ij}}{r_{ij}}\right)^{6}\right].
+  \label{eq:lj-hess-rr}
+\end{align}
+The full Cartesian Hessian $\mat{H} \in \mathbb{R}^{3N \times 3N}$
+is assembled from the off-diagonal $3{\times}3$ blocks
+\begin{equation}
+  H_{ia,jb} = -\!\left(
+    \frac{\partial^2 V}{\partial r^2} - \frac{1}{r}\frac{\partial V}{\partial r}
+  \right) \hat{r}_a \hat{r}_b
+  \;-\; \frac{1}{r}\frac{\partial V}{\partial r}\;\delta_{ab},
+  \qquad i \ne j,
+  \label{eq:lj-hess-cart}
+\end{equation}
+with diagonal blocks $H_{ii} = -\sum_{j \ne i} H_{ij}$.
+
+\paragraph{UFF parameters and $\sigma$-scaling.}
+Per-atom $\sigma_i, \varepsilon_i$ are taken from the UFF force field
+(Rapp\'{e} et al., \textit{J.\ Am.\ Chem.\ Soc.}\ 1992), with
+Lorentz--Berthelot mixing:
+$\sigma_{ij} = (\sigma_i + \sigma_j)/2$,
+$\varepsilon_{ij} = \sqrt{\varepsilon_i \varepsilon_j}$.
+Raw UFF $\sigma$ values range from 2.6--3.7\,\AA{} (equilibrium distance
+$r_\text{eq} = 2^{1/6}\sigma$, i.e.\ 2.9--4.2\,\AA), far longer than
+covalent bonds (1.0--1.5\,\AA).
+
+To place Transition1x geometries in valid LJ wells, we scale all $\sigma$
+values by $1/3$ (\texttt{lj\_sigma\_scale\,=\,0.3333}), shrinking LJ equilibria
+to ${\sim}1.0$--$1.3$\,\AA{} and matching covalent bond lengths.
+Energies are converted from kcal/mol to eV via
+$1\,\text{kcal/mol} = 0.0434\,\text{eV}$.
+
+\paragraph{What the potential does \emph{not} include.}
+LJ is purely pairwise: $V$ depends only on interatomic \emph{distances}
+$r_{ij}$, not on bond angles or dihedrals.  Directions in configuration space
+that change angles without changing any $r_{ij}$ have \emph{exactly zero}
+curvature in the Hessian.  This is the origin of ghost modes
+(Section~\ref{sec:ghost}).
 
 % =============================================================================
 \section{Experimental Setup}
@@ -106,38 +157,279 @@ The LJ~v2 grid mirrors the DFTB0 v13 grid exactly:
 \end{tabular}
 \end{table}
 
-\subsection{Fixed parameters (identical to DFTB0 v13)}
+\subsection{Starting geometries and noise model}
+\label{sec:noise-model}
 
-\begin{itemize}[nosep]
-  \item Calculator: \texttt{lj} with \texttt{lj\_sigma\_scale=0.3333}
-  \item Max atom displacement (MAD): 1.3\,\AA
-  \item Force convergence: $\varepsilon = 10^{-4}$\,eV/\AA
-  \item Min interatomic distance: 0.5\,\AA
-  \item Trust radius floor: 0.01\,\AA
-  \item Relaxed eigenvalue threshold: $-0.01$\,eV/\AA$^2$
-  \item Eckart projection to $3N-6$ vibrational modes
-  \item Log spectrum: top-$k=10$ eigenvalues logged per step
-  \item Late escape after: 15\,000 steps
-  \item Noise seed: 42 (SLURM job ID for single test)
-\end{itemize}
+Each of the 287 Transition1x samples provides a reactant geometry
+$\vect{x}_R$ and a transition-state geometry $\vect{x}_\text{TS}$.  The
+\textbf{starting geometry} is the midpoint:
+\begin{equation}
+  \vect{x}_0 = \tfrac{1}{2}(\vect{x}_R + \vect{x}_\text{TS}).
+  \label{eq:midpoint}
+\end{equation}
 
+\textbf{Gaussian noise} is then added independently to each Cartesian
+coordinate:
+\begin{equation}
+  \vect{x}_\text{start} = \vect{x}_0 + \bm{\eta},
+  \qquad \eta_{ia} \sim \mathcal{N}(0, \sigma^2),
+  \label{eq:noise}
+\end{equation}
+where $\sigma$ is the \textbf{noise level} in Angstroms.  The four noise
+levels tested are $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$\,\AA, matching the
+DFTB0 v13 grid exactly.
+
+\paragraph{Reproducibility.}
+Each sample receives a deterministic seed: $\texttt{noise\_seed} +
+\texttt{sample\_index}$.  The base seed is the SLURM job ID
+(\texttt{noise\_seed\,=\,42} for the grid).  This ensures identical noise
+vectors across configs at the same noise level.
+
+% =============================================================================
+\subsection{The v12b optimizer}
+\label{sec:optimizer}
+% =============================================================================
+
+The optimizer is a Newton--Raphson minimizer operating in Cartesian
+coordinates, with the following components assembled incrementally across
+versions v1--v12b.  The ``full v12b'' configuration used in the main
+experiment enables all components described below.
+
+% --- RFO ---
+\subsubsection{RFO step builder (v10b)}
+\label{sec:rfo}
+
+At each step, the raw Cartesian Hessian is mass-weighted and projected to
+the $(3N{-}k)$-dimensional vibrational subspace via an Eckart basis
+(Section~\ref{sec:eckart}).  The reduced Hessian is diagonalized:
+\begin{equation}
+  \mat{H}_\text{red} = \mat{Q}_\text{vib}^\top \mat{M}^{-1/2}\mat{H}\mat{M}^{-1/2} \mat{Q}_\text{vib},
+  \quad
+  \mat{H}_\text{red}\,\vect{v}_i = \lambda_i\,\vect{v}_i.
+  \label{eq:hessian-diag}
+\end{equation}
+
+The step is computed via the \textbf{Rational Function Optimization (RFO)}
+augmented Hessian (Schlegel 2011, Eq.~20):
+\begin{equation}
+  \begin{pmatrix} \mat{H}_\text{red} & \vect{g} \\
+                  \vect{g}^\top & 0 \end{pmatrix}
+  \begin{pmatrix} \vect{s} \\ 1 \end{pmatrix}
+  = \mu \begin{pmatrix} \vect{s} \\ 1 \end{pmatrix},
+  \label{eq:rfo}
+\end{equation}
+where $\vect{g}$ is the projected gradient.  The lowest eigenvalue $\mu$
+of this augmented system is found by Newton's method on the secular equation:
+\begin{equation}
+  \sum_i \frac{c_i^2}{\lambda_i - \mu} + \mu = 0,
+  \qquad c_i = \vect{g} \cdot \vect{v}_i.
+  \label{eq:secular}
+\end{equation}
+
+The resulting step coefficients are:
+\begin{equation}
+  \Delta x_i = \frac{-c_i}{\lambda_i - \mu},
+  \qquad \vect{\Delta x} = \sum_i \Delta x_i\,\vect{v}_i.
+  \label{eq:rfo-step}
+\end{equation}
+
+For minimization, $\mu < \lambda_\text{min}$, so all denominators are
+positive and the step is guaranteed to be a descent direction.  Unlike a
+fixed-shift Newton step, RFO \emph{automatically} interpolates between
+steepest descent (large gradient $\Rightarrow$ large $|\mu|$) and pure
+Newton (small gradient $\Rightarrow$ $\mu \to 0$), with no hyperparameters
+to tune.
+
+% --- Trust region ---
+\subsubsection{Trust region and displacement capping}
+\label{sec:trust-region}
+
+The RFO step is capped by a per-atom trust radius:
+\begin{equation}
+  \text{if } \max_i \norm{\Delta\vect{x}_i} > R, \quad
+  \Delta\vect{x} \leftarrow \Delta\vect{x} \cdot \frac{R}{\max_i\norm{\Delta\vect{x}_i}},
+  \label{eq:cap}
+\end{equation}
+where $R$ is the current trust radius, initialized at
+$R_0 = \texttt{MAD} = 1.3$\,\AA{} (maximum atom displacement).
+
+After each step, the trust radius is updated based on the ratio
+$\rho = \Delta E_\text{actual} / \Delta E_\text{predicted}$:
+\begin{equation}
+  R \leftarrow \begin{cases}
+    \min(1.5\,R,\;\texttt{MAD}) & \text{if } \rho > 0.75
+      \text{ and step hit boundary}, \\
+    \max(0.25\,\norm{\Delta\vect{x}}_\text{max},\;R_\text{floor}) & \text{if } \rho < 0.25, \\
+    R & \text{otherwise}.
+  \end{cases}
+  \label{eq:trust-update}
+\end{equation}
+The predicted energy change uses the quadratic model:
+$\Delta E_\text{pred} = \vect{g}^\top \Delta\vect{x}
++ \tfrac{1}{2} \sum_i \lambda_i (\Delta x_i)^2$.
+
+The \textbf{trust radius floor} $R_\text{floor} = 0.01$\,\AA{} prevents the
+trust radius from collapsing to zero, ensuring the optimizer can always take
+meaningful steps even when the quadratic model is unreliable.
+Steps that would create interatomic distances below
+$d_\text{min} = 0.5$\,\AA{} are rejected and the trust radius is shrunk.
+
+% --- PLS ---
+\subsubsection{Polynomial line search (v10c)}
+\label{sec:pls}
+
+After each accepted trust-region step, a \textbf{cubic interpolation
+refinement} is attempted.  Given the energy and directional derivative at
+the old and new positions, a cubic polynomial $p(t)$ is fit on $t \in [0,1]$:
+\begin{equation}
+  p(0) = E_\text{old},\quad p(1) = E_\text{new},\quad
+  p'(0) = \vect{g}_\text{old} \cdot \Delta\vect{x},\quad
+  p'(1) = \vect{g}_\text{new} \cdot \Delta\vect{x}.
+  \label{eq:pls-constraints}
+\end{equation}
+If $p(t)$ has an interior minimum $t^* \in (0.1, 0.9)$ with $p''(t^*) > 0$,
+the step is refined to $t^*\,\Delta\vect{x}$.  The refined point is
+accepted only if it yields a lower energy than the original step and
+satisfies the minimum-distance constraint.  Otherwise the original step is
+kept.  This extracts additional energy reduction at the cost of one extra
+PES evaluation.
+
+% --- Eckart projection ---
+\subsubsection{Eckart projection and gradient projection}
+\label{sec:eckart}
+
+Translation and rotation (TR) modes are removed by construction, not by
+threshold filtering.  An orthonormal \textbf{Eckart basis}
+$\mat{B} \in \mathbb{R}^{3N \times k}$ ($k = 5$ or $6$) is built from
+mass-weighted translations and infinitesimal rotations.  The complementary
+vibrational basis $\mat{Q}_\text{vib} \in \mathbb{R}^{3N \times (3N-k)}$
+is obtained by QR factorization, and the reduced Hessian is:
+\begin{equation}
+  \mat{H}_\text{red} = \mat{Q}_\text{vib}^\top\,\mat{H}_\text{mw}\,\mat{Q}_\text{vib}
+  \in \mathbb{R}^{(3N-k) \times (3N-k)}.
+  \label{eq:reduced-hessian}
+\end{equation}
+Every eigenvalue of $\mat{H}_\text{red}$ is a genuine vibrational
+frequency---there are no zero eigenvalues to filter.
+
+The gradient is also projected to the vibrational subspace before building
+the step (\texttt{--project-gradient-and-v}), preventing leakage into TR
+null space.
+
+% --- Kick mechanisms ---
+\subsubsection{Kick mechanisms (v12/v12b)}
+\label{sec:kicks}
+
+Three perturbation mechanisms escape saddle points when the optimizer stalls
+with $n_\text{neg} > 0$.  A \textbf{mode tracker} maintains continuity of
+the negative eigenvectors across steps (via max-overlap matching) and tracks
+how long each mode has persisted (its ``age'') and how much gradient overlap
+it has.
+
+\paragraph{1.\ Oscillation kick (v12).}
+Triggered when energy oscillation (frequent sign changes in $\Delta E$ over
+an 8-step window with small net progress) is detected at the trust-radius
+floor for $\geq 3$ consecutive checks.  The optimizer is perturbed along the
+longest-stuck negative eigenvector:
+\begin{equation}
+  \vect{x} \leftarrow \vect{x} + s \cdot \delta \cdot \vect{v}_\text{neg},
+  \label{eq:osc-kick}
+\end{equation}
+where $s = \text{sign}(\vect{g} \cdot \vect{v}_\text{neg})$ and $\delta$
+is the kick magnitude (see adaptive scaling below).  A 50-step cooldown
+prevents rapid re-triggering.
+
+\paragraph{2.\ Blind-mode kick (v12) with probe (v12b).}
+Triggered when a negative mode persists for $\geq 100$ steps with
+gradient overlap $< 0.1$ (the gradient has negligible component along the
+mode, so normal NR steps cannot resolve it) \emph{and} the force norm is
+below 0.1\,eV/\AA.
+
+With \textbf{probe} enabled (v12b), the optimizer evaluates both directions
+$\pm\vect{v}_\text{neg}$ at increasing magnitudes
+($1\times, 2\times, 5\times, 10\times, 20\times$ the trust-radius floor)
+and accepts the first point where $n_\text{neg}$ decreases.  If no such
+point exists, the lowest-energy probe point is taken.
+
+\paragraph{3.\ Late escape (v12b).}
+After step 15\,000, if $n_\text{neg} > 0$, the optimizer tries an
+aggressive displacement $\alpha = 0.1$\,\AA{} along the longest-stuck
+negative eigenvector in both directions.  The displacement is accepted
+\emph{only if $n_\text{neg}$ decreases}.  This is a last resort for
+trajectories that have converged in forces but remain stuck at a
+higher-order saddle point.  A 500-step cooldown limits the frequency of
+late-escape attempts.
+
+\paragraph{Adaptive kick scaling (v12b).}
+When enabled, kick magnitudes scale with the eigenvalue:
+\begin{equation}
+  \delta = \min\!\big(C\sqrt{|\lambda_\text{neg}|},\; 10\,R_\text{floor}\big),
+  \quad \delta \geq R_\text{floor},
+  \label{eq:adaptive-scale}
+\end{equation}
+with $C = 0.1$.  This produces larger kicks for more negative eigenvalues
+and gentler kicks near zero, replacing the fixed scales
+$\delta_\text{osc} = 0.1\,R_\text{floor}$,
+$\delta_\text{blind} = 0.5\,R_\text{floor}$ used without adaptive scaling.
+
+% --- Convergence ---
 \subsection{Convergence criteria}
+\label{sec:convergence}
 
-Two convergence criteria are evaluated:
+At each step, the force norm $\|\vect{f}\|_\text{mean}$ and the vibrational
+eigenvalue spectrum $\{\lambda_i\}$ are evaluated.  Convergence is classified
+into three categories:
+
 \begin{description}[nosep]
-  \item[Strict:] $\norm{\vect{f}}_\infty < \varepsilon$ \textbf{and}
+  \item[Strict:] $\norm{\vect{f}}_\text{mean} < \varepsilon$ \textbf{and}
     $n_\text{neg} = 0$ (no negative vibrational eigenvalues after Eckart
     projection).
-  \item[Relaxed:] $\norm{\vect{f}}_\infty < \varepsilon$ \textbf{and}
-    $\lambda_\text{min} \geq -0.01$ (all negative eigenvalues have magnitude
-    below $\sqrt{\varepsilon}$).
+  \item[Relaxed:] $\norm{\vect{f}}_\text{mean} < \varepsilon$ \textbf{and}
+    $\lambda_\text{min} \geq -\tau$ (all negative eigenvalues have magnitude
+    below threshold $\tau$).
+  \item[None:] force criterion not met, or negative eigenvalues exceed the
+    relaxed threshold.
 \end{description}
 
-The relaxed criterion is motivated by the $\varepsilon^{1/2}$ second-order
-optimality theorem (Boumal et al.): an ARC/RFO-type method with force
-convergence $\varepsilon$ guarantees
-$\lambda_\text{min}(\mat{H}) \geq -\sqrt{\varepsilon}$.  For
-$\varepsilon = 10^{-4}$, this gives $\sqrt{10^{-4}} = 0.01$.
+With $\varepsilon = 10^{-4}$\,eV/\AA{} and $\tau = 0.01$, the relaxed
+criterion is motivated by the $\varepsilon^{1/2}$ second-order optimality
+theorem (Boumal et al.): an RFO-type method with force convergence
+$\varepsilon$ guarantees $\lambda_\text{min} \geq -C\sqrt{\varepsilon}$.
+For $\varepsilon = 10^{-4}$, this gives $\sqrt{10^{-4}} = 0.01$.
+
+When \texttt{--accept-relaxed} is set (as in all LJ v2 runs), samples
+reaching RELAXED are counted as converged and the optimizer terminates.
+
+\subsection{Summary of fixed parameters}
+
+All parameters below are identical to the DFTB0 v13 grid except the
+calculator:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Parameter & Value & Purpose \\
+\midrule
+Calculator & LJ (UFF, $\sigma/3$) & PES evaluation \\
+Force convergence $\varepsilon$ & $10^{-4}$\,eV/\AA & first-order criterion \\
+Relaxed threshold $\tau$ & 0.01 & second-order criterion \\
+Max atom displacement (MAD) & 1.3\,\AA & initial trust radius \\
+Trust radius floor $R_\text{floor}$ & 0.01\,\AA & prevents TR collapse \\
+Min interatomic distance & 0.5\,\AA & rejects unphysical steps \\
+Noise seed & 42 & reproducibility \\
+Late escape after & 15\,000 steps & last-resort saddle escape \\
+Late escape $\alpha$ & 0.1\,\AA & late-escape displacement \\
+Late escape cooldown & 500 steps & limits late-escape frequency \\
+Adaptive kick $C$ & 0.1 & eigenvalue-scaled kick magnitude \\
+Osc-kick patience & 3 & consecutive oscillation detections \\
+Osc-kick cooldown & 50 steps & limits osc-kick frequency \\
+Blind-kick patience & 100 steps & mode persistence before kick \\
+Blind-kick overlap threshold & 0.1 & defines ``blind'' (low overlap) \\
+Blind-kick force threshold & 0.1\,eV/\AA & kick only when forces are small \\
+Blind-kick probe factors & $1,2,5,10,20$ & multiples of $R_\text{floor}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 % =============================================================================
 \section{Results: Main Grid}
