@@ -364,7 +364,9 @@ _GAD_ON_NR_FAILURE: bool = False
 
 
 def scine_worker_sample(predict_fn, payload) -> Dict[str, Any]:
-    sample_idx, batch, _, _, start_from, noise_seed = payload
+    (sample_idx, batch, start_from, noise_seed,
+     nr_params, gad_params, nr_n_steps, gad_n_steps,
+     gad_variant, gad_on_nr_failure) = payload
     batch = batch.to("cpu")
     atomic_nums = batch.z.detach().to("cpu")
     start_coords = parse_starting_geometry(
@@ -397,12 +399,12 @@ def scine_worker_sample(predict_fn, payload) -> Dict[str, Any]:
         predict_fn,
         start_coords,
         atomic_nums,
-        _NR_PARAMS,
-        _GAD_PARAMS,
-        _NR_N_STEPS,
-        _GAD_N_STEPS,
-        gad_variant=_GAD_VARIANT,
-        gad_on_nr_failure=_GAD_ON_NR_FAILURE,
+        nr_params,
+        gad_params,
+        nr_n_steps,
+        gad_n_steps,
+        gad_variant=gad_variant,
+        gad_on_nr_failure=gad_on_nr_failure,
         sample_id=f"sample_{sample_idx:03d}",
         formula=str(formula),
         known_ts_coords=known_ts_coords,
@@ -423,15 +425,20 @@ def run_batch(
     max_samples: int,
     start_from: str,
     noise_seed: Optional[int],
+    nr_params: Dict[str, Any],
+    gad_params: Dict[str, Any],
+    nr_n_steps: int,
+    gad_n_steps: int,
+    gad_variant: str,
+    gad_on_nr_failure: bool,
 ) -> Dict[str, Any]:
     samples = []
-    # payload format matches what scine_worker_sample expects
-    dummy_params: Dict[str, Any] = {}
-    dummy_nsteps = 0
     for i, batch in enumerate(dataloader):
         if i >= max_samples:
             break
-        payload = (i, batch, dummy_params, dummy_nsteps, start_from, noise_seed)
+        payload = (i, batch, start_from, noise_seed,
+                   nr_params, gad_params, nr_n_steps, gad_n_steps,
+                   gad_variant, gad_on_nr_failure)
         samples.append((i, payload))
 
     results = run_batch_parallel(samples, processor)
@@ -676,6 +683,12 @@ def main() -> None:
             args.max_samples,
             args.start_from,
             args.noise_seed,
+            nr_params=_NR_PARAMS,
+            gad_params=_GAD_PARAMS,
+            nr_n_steps=_NR_N_STEPS,
+            gad_n_steps=_GAD_N_STEPS,
+            gad_variant=_GAD_VARIANT,
+            gad_on_nr_failure=_GAD_ON_NR_FAILURE,
         )
 
         # Save results
