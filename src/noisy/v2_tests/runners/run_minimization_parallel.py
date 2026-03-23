@@ -74,6 +74,7 @@ from src.noisy.v2_tests.baselines.minimization import (
     run_newton_raphson,
 )
 from src.noisy.v2_tests.baselines.pic_arc import run_pic_arc
+from src.parallel.lj_parallel import ParallelLJProcessor
 from src.parallel.scine_parallel import ParallelSCINEProcessor
 from src.parallel.utils import run_batch_parallel
 
@@ -448,7 +449,7 @@ def _build_cascade_table(results: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def run_batch(
-    processor: ParallelSCINEProcessor,
+    processor,
     dataloader,
     params: Dict[str, Any],
     n_steps: int,
@@ -493,6 +494,16 @@ def main() -> None:
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--split", type=str, default="test")
     parser.add_argument("--scine-functional", type=str, default="DFTB0")
+    parser.add_argument(
+        "--calculator", type=str, default="scine",
+        choices=["scine", "lj"],
+        help="Calculator backend: 'scine' (DFTB0, default) or 'lj' (Lennard-Jones).",
+    )
+    parser.add_argument(
+        "--lj-sigma-scale", type=float, default=1.0 / 3.0,
+        help="Scale factor for UFF sigma values. Default 1/3 shrinks LJ equilibria "
+             "to match covalent bond lengths so Transition1x geometries are valid.",
+    )
     parser.add_argument("--n-steps", type=int, default=5000)
     parser.add_argument("--max-samples", type=int, default=20)
     parser.add_argument("--start-from", type=str, default="midpoint_rt_noise1.0A")
@@ -1005,12 +1016,20 @@ def main() -> None:
         "max_neg_modes_in_subspace": args.max_neg_modes_in_subspace,
     }
 
-    processor = ParallelSCINEProcessor(
-        functional=args.scine_functional,
-        threads_per_worker=args.threads_per_worker,
-        n_workers=args.n_workers,
-        worker_fn=scine_worker_sample,
-    )
+    if args.calculator == "lj":
+        processor = ParallelLJProcessor(
+            sigma_scale=args.lj_sigma_scale,
+            threads_per_worker=args.threads_per_worker,
+            n_workers=args.n_workers,
+            worker_fn=scine_worker_sample,  # same worker_fn — it only uses predict_fn
+        )
+    else:
+        processor = ParallelSCINEProcessor(
+            functional=args.scine_functional,
+            threads_per_worker=args.threads_per_worker,
+            n_workers=args.n_workers,
+            worker_fn=scine_worker_sample,
+        )
     processor.start()
 
     try:
@@ -1038,7 +1057,9 @@ def main() -> None:
                         "max_samples": args.max_samples,
                         "start_from": args.start_from,
                         "noise_seed": args.noise_seed,
-                        "scine_functional": args.scine_functional,
+                        "calculator": args.calculator,
+                        "scine_functional": args.scine_functional if args.calculator == "scine" else None,
+                        "lj_sigma_scale": args.lj_sigma_scale if args.calculator == "lj" else None,
                         "n_workers": args.n_workers,
                         "threads_per_worker": args.threads_per_worker,
                         "split": args.split,

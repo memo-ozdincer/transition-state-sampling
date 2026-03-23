@@ -379,7 +379,7 @@ def _spectral_gap_info(evals_vib: torch.Tensor) -> Dict[str, Any]:
         return {"spectral_gap_ratio": float("nan"), "dominant_neg_mode": False}
 
     if lam1 >= 0:
-        # Exactly one negative eigenvalue — perfectly isolated
+        # single negative eigenvalue, perfectly isolated
         return {"spectral_gap_ratio": float("inf"), "dominant_neg_mode": True}
 
     # Both negative
@@ -558,7 +558,7 @@ def _eigenvector_continuity(
 
 
 # ---------------------------------------------------------------------------
-# v12: ModeTracker — track identity of negative Hessian modes across steps
+# v12: ModeTracker. Tracks identity of negative Hessian modes across steps
 # ---------------------------------------------------------------------------
 
 class ModeTracker:
@@ -594,8 +594,7 @@ class ModeTracker:
             grad_norm = 1e-30
 
         if n_neg == 0:
-            # All modes went positive — clear tracking
-            self.tracked_modes = []
+            self.tracked_modes = []  # all modes positive, nothing to track
             return
 
         neg_evals = evals_vib[neg_mask]
@@ -611,7 +610,7 @@ class ModeTracker:
         cur_overlaps = (grad_projs.abs() / grad_norm).tolist()
 
         if len(self.tracked_modes) == 0:
-            # First step with negative modes — initialize
+            # first encounter, seed the tracker
             for i in range(n_neg):
                 g_ov = cur_overlaps[i]
                 self.tracked_modes.append({
@@ -730,7 +729,7 @@ class ModeTracker:
 
 
 # ---------------------------------------------------------------------------
-# v4: Blind-mode correction — gradient-independent perturbation
+# v4: Blind-mode correction (gradient-independent perturbation)
 # ---------------------------------------------------------------------------
 
 def _blind_mode_correction(
@@ -889,7 +888,7 @@ def _nr_step_shifted_newton(
     Safety: shifted_lam is clamped to ≥ shift_epsilon so that when lam_min ≈ 0
     (near a flat/converged geometry) the shift σ ≈ shift_epsilon does not make
     near-zero modes explode.  Without this, a mode with λ ≈ 0 gets
-    weight 1/shift_epsilon which is 1e4 for ε=1e-4 — blowing up the step.
+    weight 1/shift_epsilon which is 1e4 for ε=1e-4, blowing up the step.
     """
     lam_min = float(lam_all.min().item())
     sigma = max(0.0, -lam_min) + shift_epsilon
@@ -1394,7 +1393,7 @@ class _GDIISExtrapolator:
         # Condition of the B matrix (for diagnostics)
         try:
             b_cond = float(torch.linalg.cond(B).item())
-        except Exception:
+        except (torch.linalg.LinAlgError, RuntimeError):
             b_cond = float("inf")
 
         info: Dict[str, Any] = {
@@ -1418,7 +1417,7 @@ class _GDIISExtrapolator:
 
 
 # ---------------------------------------------------------------------------
-# v3: Stagnation escape — targeted perturbation along negative modes
+# v3: Stagnation escape via targeted perturbation along negative modes
 # ---------------------------------------------------------------------------
 
 def _stagnation_escape_perturbation(
@@ -1796,7 +1795,7 @@ def run_fixed_step_gd(
 
         force_norm = _force_mean(forces)
 
-        # Vibrational eigenvalues via reduced basis — no threshold filtering.
+        # vibrational eigenvalues via reduced basis, no threshold filtering needed
         evals_vib, _, _ = get_vib_evals_evecs(hessian, coords, atomsymbols,
                                               purify_hessian=purify_hessian)
 
@@ -2155,7 +2154,7 @@ def run_newton_raphson(
 
         force_norm = _force_mean(forces)
 
-        # Vibrational eigenvalues via reduced basis — exactly 3N-k values, no threshold.
+        # vibrational eigenvalues via reduced basis (exactly 3N-k values, no threshold)
         evals_vib, evecs_vib_3N, _ = get_vib_evals_evecs(
             hessian, coords, atomsymbols, purify_hessian=purify_hessian,
         )
@@ -2693,17 +2692,17 @@ def run_newton_raphson(
                 rho_arc = (-actual_dE) / pred_decrease if pred_decrease > 1e-12 else 0.0
 
                 if rho_arc >= arc_eta1:
-                    # Successful step — accept
+                    # successful, accept
                     arc_accepted = True
                     coords = new_coords.detach()
                     out = out_new
 
                     if rho_arc >= arc_eta2:
-                        # Very successful — decrease σ
+                        # very successful, shrink regularization
                         arc_sigma = max(arc_sigma * arc_gamma2, arc_sigma_min)
                     # else: keep σ unchanged
                 else:
-                    # Unsuccessful — reject step, increase σ
+                    # unsuccessful, reject and increase σ
                     arc_sigma = min(arc_sigma * arc_gamma1, arc_sigma_max)
 
             step_record["arc_info"].update({
@@ -2986,7 +2985,7 @@ def run_newton_raphson(
                 out = out_new
 
         # ---------------------------------------------------------------
-        # v4: Aggressive trust recovery — reset on n_neg decrease,
+        # v4: Aggressive trust recovery. Reset on n_neg decrease,
         # grow on 50-step eigenvalue improvement
         # ---------------------------------------------------------------
         if aggressive_trust_recovery and not use_line_search:
@@ -3162,7 +3161,7 @@ def run_newton_raphson(
                                 pe = _to_float(pout["energy"])
 
                                 if pn_neg < n_neg:
-                                    # n_neg decreased — accept immediately
+                                    # n_neg decreased, accept immediately
                                     best_kick_coords = pcoords
                                     best_kick_out = pout
                                     best_kick_sign = psign

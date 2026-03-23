@@ -200,7 +200,7 @@ def reduced_basis_hessian_torch(
 ) -> dict[str, torch.Tensor]:
     """Mass-weight and project Hessian to the full-rank vibrational subspace.
 
-    Returns a (3N-k, 3N-k) Hessian with NO zero eigenvalues — every eigenvalue
+    Returns a (3N-k, 3N-k) Hessian with no zero eigenvalues. Every eigenvalue
     is a genuine vibrational frequency.  This eliminates the need for
     threshold-based TR filtering and avoids the numerical issues of working
     with a rank-deficient (3N, 3N) projected Hessian.
