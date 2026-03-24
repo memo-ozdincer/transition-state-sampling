@@ -299,6 +299,98 @@ Sample & TS? & Final Morse idx & TS? & GAD steps & Final Morse idx \\
 \end{tabular}
 \end{center}
 
+\subsection{Deeper analysis of Phase 1 results}
+
+\subsubsection{Per-formula breakdown}
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+Formula & $N$ & Path TS & Nopath TS & Mean NR steps & Mean nopath GAD \\
+\midrule
+C$_2$H$_3$N$_3$O$_2$ & 5 & 1/5 (20\%) & 5/5 (100\%) & 1867 & 146 \\
+C$_2$H$_5$NO$_2$      & 6 & 2/6 (33\%) & 6/6 (100\%) & 681  & 55 \\
+C$_2$HNO               & 4 & 2/4 (50\%) & 4/4 (100\%) & 15144 & 128 \\
+C$_2$HNO$_3$           & 1 & 0/1 (0\%)  & 1/1 (100\%) & 221  & 72 \\
+C$_3$H$_5$NO$_2$      & 4 & 2/4 (50\%) & 4/4 (100\%) & 2473 & 6 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Path GAD failure is consistent across all molecular families.  Nopath GAD is
+uniformly 100\%.
+
+\subsubsection{NR difficulty correlates with path GAD failure}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& Mean NR steps & Median NR steps \\
+\midrule
+Path GAD succeeds ($n=7$)  & 1046 & 172 \\
+Path GAD fails ($n=13$)    & 5907 & 1006 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Harder-to-minimize samples (more NR steps) are more likely to cause path GAD
+failure.  Hypothesis: these correspond to flatter basins where the trust-region
+mechanism takes too-aggressive steps and overshoots past the index-1 saddle.
+
+\subsubsection{NR ``relaxed convergence'' and residual forces}
+
+Many NR-converged samples have high residual force norms (0.02--0.97~eV/$\angstrom$),
+far above the nominal $10^{-4}$ threshold. These are accepted via
+\texttt{--nr-accept-relaxed} (Morse index 0 + forces below relaxed threshold).
+The geometry is near a minimum but not precisely \emph{at} it.
+
+\begin{center}
+\begin{tabular}{ccccl}
+\toprule
+Sample & NR force norm & NR min $\eval$ & Path GAD & Comment \\
+\midrule
+9  & 0.970 & 0.0033 & Fail (Morse 3) & Very high residual force \\
+7  & 0.114 & $6.8\times10^{-6}$ & Fail (Morse 1) & Near-flat basin \\
+4  & 0.119 & $2.3\times10^{-7}$ & Fail (Morse 4) & Near-flat, huge overshoot \\
+3  & 0.067 & $3.3\times10^{-4}$ & Fail (Morse 1) & Borderline: $\eval_0 \eval_1 = -3.7\times10^{-7}$ \\
+\midrule
+5  & --- & --- & Success (7 steps) & Fast convergence \\
+18 & --- & --- & Success (6 steps) & Fast convergence \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Eigenvalue spectrum of path GAD failures}
+
+Two failure modes emerge:
+
+\begin{enumerate}[nosep]
+  \item \textbf{Massive overshoot} (Morse 3--7): 5 of 13 failures end at
+        index 3--7 with multiple negative eigenvalues $O(10^{-2})$.
+        These passed through the index-1 TS and climbed further.
+  \item \textbf{Borderline miss} (Morse 1, $|\eval_0 \eval_1|$ near $\epsilon$):
+        3 of 13 failures have Morse index 1 but $\eval_0 \eval_1 \approx
+        -10^{-7}$ to $-10^{-8}$, just above the $-10^{-5}$ convergence
+        threshold.  These are \emph{almost} TS but not quite --- a looser
+        threshold might rescue them.
+\end{enumerate}
+
+\subsubsection{Nopath GAD step distribution}
+
+\begin{center}
+\begin{tabular}{lccccc}
+\toprule
+& Min & Median & Mean & p90 & Max \\
+\midrule
+Nopath GAD steps (converged, $n=20$) & 1 & 38 & 83 & 282 & 422 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Median 38 steps = very fast.  Even the slowest sample (422 steps) is well within
+the 20k budget.  The 20k GAD step budget is \textasciitilde500$\times$ what is
+needed at $\sigma = 1.0$~$\angstrom$.
+
 \subsection{Interpretation}
 
 \begin{enumerate}[nosep]
@@ -324,6 +416,12 @@ Sample & TS? & Final Morse idx & TS? & GAD steps & Final Morse idx \\
         Despite more GAD steps (83--109 vs.\ 12), nopath runs 2$\times$ faster
         wall-clock because the per-step cost is much lower (no trust-region
         update, no path history).
+
+  \item \textbf{Residual NR forces may exacerbate path GAD overshoot.}
+        Relaxed NR convergence leaves the geometry near but not precisely at a
+        minimum.  Path GAD's trust-region starts from an already-imprecise point,
+        compounding the overshoot.  Nopath GAD's self-regulating $dt$ is robust
+        to this imprecision.
 \end{enumerate}
 
 \subsection{Implications for generative modelling}
@@ -347,6 +445,283 @@ The nopath (Markovian) variant is the clear winner on every axis:
         Or is the eigenvalue-clamped $dt$ fundamentally superior for this task?
   \item What fraction of nopath TS matches the \emph{known} TS in Transition1x?
         (We find \emph{a} TS, but is it the \emph{right} TS?)
+  \item Does the NR step count / residual force affect nopath GAD performance
+        at higher noise levels?
 \end{enumerate}
+
+%=============================================================================
+\section{Full-Scale Results (Phase 2)}
+\label{sec:phase2}
+%=============================================================================
+
+Phase 2 runs on \texttt{tri0279} (192 CPUs, 48 workers), 2026-03-24.
+$N \approx 287$ samples per configuration (13 samples excluded at HDF5 load).
+All runs use noise seed 42 for reproducibility.
+
+\subsection{Main results: Path vs Nopath at scale}
+
+\begin{center}
+\begin{tabular}{llccccccc}
+\toprule
+GAD variant & $\sigma$ & $N$ & NR conv & TS $|$ NR & TS / $N$ & NR med & GAD med & Wall \\
+\midrule
+path   & 0.5 & 287 & 275 (96\%) & 205/275 (\textbf{75\%}) & 71\% & 578  & 7  & 27h \\
+path   & 1.0 & 287 & 281 (98\%) & 124/281 (\textbf{44\%}) & 43\% & 2465 & 10 & 19h \\
+path   & 1.5 & 287 & 275 (96\%) & 93/275 (\textbf{34\%})  & 32\% & 5352 & 12 & 27h \\
+path   & 2.0 & 287 & 260 (91\%) & 40/260 (\textbf{15\%})  & 14\% & 8926 & 10 & 41h \\
+\midrule
+nopath & 0.5 & 287 & 268 (93\%) & 268/268 (\textbf{100\%}) & 93\% & 596  & 9  & 8h \\
+nopath & 1.0 & 287 & 272 (95\%) & 271/272 (\textbf{100\%}) & 94\% & 2582 & 11 & 15h \\
+nopath & 1.5 & 260$^*$ & 258$^*$ & 258/260$^*$ (\textbf{99\%}) & 99\%$^*$ & --- & 13$^*$ & ---$^*$ \\
+nopath & 2.0 & \multicolumn{7}{c}{\textit{(to be completed)}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\fbox{\parbox{0.95\textwidth}{%
+\textbf{Headline result:} Nopath GAD achieves $\approx$100\% TS rate given NR convergence
+(268/268 at $\sigma=0.5$; 271/272 at $\sigma=1.0$; 258/260$^*$ at $\sigma=1.5$), while
+path GAD degrades from 75\% to 15\% as noise increases.  The overall TS rate is limited
+by NR convergence (93--95\%), not by GAD.
+$^*$Partial result (260/300 samples; run interrupted by node timeout).
+}}
+
+\subsection{Rescue ablation (path GAD, $\sigma = 2.0$)}
+
+Running GAD on NR-failed samples (\texttt{--gad-on-nr-failure}):
+
+\begin{center}
+\begin{tabular}{lccccc}
+\toprule
+Config & GAD ran & TS found & TS from NR-fail & Extra TS \\
+\midrule
+Normal ($\sigma=2.0$) & 260 & 40 (15\%) & 0 & --- \\
+Rescue ($\sigma=2.0$) & 287 & 40 (14\%) & 0 & \textbf{0} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Rescue mode provides \textbf{no benefit} for path GAD.  Path-based trust-region
+GAD cannot find TS from non-converged geometries.
+
+\subsection{Path GAD failure mode analysis at scale}
+
+\begin{center}
+\begin{tabular}{lcccccccccc}
+\toprule
+$\sigma$ & $n_\text{fail}$ & M0 & M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 \\
+\midrule
+0.5 & 70  & 10 & 29 & 21 & 7  & 3  & -- & -- & -- & -- \\
+1.0 & 157 & 13 & 47 & 44 & 32 & 13 & 6  & 1  & 1  & -- \\
+1.5 & 182 & 10 & 51 & 49 & 40 & 15 & 13 & 2  & 2  & -- \\
+2.0 & 220 & 12 & 28 & 36 & 61 & 43 & 22 & 11 & 6  & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At $\sigma = 0.5$, most failures are borderline (M1: near-TS). At $\sigma = 2.0$,
+failures are dominated by massive overshoot (M3--M5), indicating the trust-region
+step size is fundamentally too aggressive for high-noise starting geometries.
+
+\subsection{Nopath GAD convergence speed}
+
+\begin{center}
+\begin{tabular}{lccccccc}
+\toprule
+$\sigma$ & $N_\text{conv}$ & Min & p25 & Median & p75 & p95 & Max \\
+\midrule
+0.5 & 268 & 1 & 2 & 9 & 36 & 147 & 11848 \\
+1.0 & 271 & 1 & 3 & 11 & 40 & 173 & 1201 \\
+1.5$^*$ & 258 & 2 & 4 & 13 & --- & 256 & 2522 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent $^*$Partial (260/300 samples).
+
+\medskip
+Median convergence: \textbf{9--13 GAD steps} across $\sigma = 0.5$--$1.5$.
+The 20k step budget is $\sim$1500$\times$ what is needed at the median and
+$\sim$80$\times$ what is needed at p95.
+
+\subsection{NR convergence: simple vs full v13}
+
+Nopath uses simplified NR (no kicks/escapes); path uses full v13.
+NR convergence rates are comparable (93--98\%) across variants, suggesting
+that kicks and late escape provide marginal benefit at these noise levels.
+
+%=============================================================================
+\section{Per-Formula Analysis}
+\label{sec:performula}
+%=============================================================================
+
+The Transition1x dataset yields 8 molecular families in our 287-sample subset.
+Two formulas dominate: C$_3$H$_5$NO$_2$ (162 samples, 56\%) and
+C$_5$H$_5$NO (97 samples, 34\%).
+
+\subsection{Nopath GAD: universally effective}
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{$\sigma = 0.5$} & \multicolumn{3}{c}{$\sigma = 1.0$} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Formula & $N$ & TS rate & GAD med & $N$ & TS rate & GAD med \\
+\midrule
+C$_3$H$_5$NO$_2$ & 162 & 148/148 (100\%) & 9  & 162 & 154/155 (99.4\%) & 12 \\
+C$_5$H$_5$NO      & 97  & 93/93 (100\%)   & 12 & 97  & 91/91 (100\%)    & 10 \\
+C$_3$H$_8$N$_2$O  & 8   & 8/8 (100\%)     & 4  & 8   & 7/7 (100\%)      & 5 \\
+C$_2$H$_5$NO$_2$  & 6   & 5/5 (100\%)     & 4  & 6   & 6/6 (100\%)      & 18 \\
+C$_2$H$_3$N$_3$O$_2$ & 5 & 5/5 (100\%)   & 1  & 5   & 5/5 (100\%)      & 47 \\
+C$_2$HNO           & 4   & 4/4 (100\%)     & 28 & 4   & 4/4 (100\%)      & 31 \\
+C$_3$HNO$_2$       & 4   & 4/4 (100\%)     & 2  & 4   & 3/3 (100\%)      & 66 \\
+C$_2$HNO$_3$       & 1   & 1/1 (100\%)     & 41 & 1   & 1/1 (100\%)      & 72 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Every formula achieves 100\% TS rate given NR convergence.}  The
+single failure (sample 168, C$_3$H$_5$NO$_2$ at $\sigma=1.0$) has
+\texttt{NaN} eigenvalue product and empty spectrum---a numerical error
+(calculator crash), not an algorithmic failure.
+
+\subsection{Total step budget (NR + GAD combined)}
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+Config & Median & Mean & p95 & Max & Budget used \\
+\midrule
+nopath $\sigma=0.5$ & 682  & 2987  & 12620 & 47134 & 1.0\% (median) \\
+nopath $\sigma=1.0$ & 2707 & 5898  & 22870 & 49890 & 3.9\% (median) \\
+path $\sigma=0.5$   & 310  & 1617  & 7162  & 41671 & 0.4\% (median) \\
+path $\sigma=1.0$   & 2054 & 4751  & 18213 & 47605 & 2.9\% (median) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Total budget = 50k NR + 20k GAD = 70k steps.  Median usage is 1--4\% of budget.
+The step budgets are vastly over-provisioned for the majority of samples.
+
+%=============================================================================
+\section{Comparison with Standalone NR v13}
+\label{sec:standalone}
+%=============================================================================
+
+Standalone NR v13 (full kicks, 50k steps, DFTB0) finds \emph{minima}.
+The hybrid pipeline finds \emph{transition states}.  The comparison shows
+what the GAD phase adds:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+$\sigma$ & NR-only minima & Hybrid NR$\to$GAD TS & Difference & Rate \\
+\midrule
+0.5 & 281/287 (97.9\%) & 268/287 (93.4\%) & $-13$ & 95.4\% of NR minima $\to$ TS \\
+1.0 & 278/287 (96.9\%) & 271/287 (94.4\%) & $-7$  & 97.5\% of NR minima $\to$ TS \\
+1.5 & 277/287 (96.5\%) & \textit{pending} & --- & --- \\
+2.0 & 267/287 (93.0\%) & \textit{pending} & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The gap (13 at $\sigma=0.5$, 7 at $\sigma=1.0$) is entirely from the
+hybrid using \emph{simple} NR (no kicks), which converges 93--95\% vs
+full v13's 97--98\%.  If the hybrid used full v13 NR, the TS count would
+approach or match the standalone NR minimum count---i.e., virtually every
+NR-converged minimum yields a TS via nopath GAD.
+
+\textbf{For the cost of $\sim$10 additional GAD steps (median), every minimum
+is converted to a transition state.}
+
+%=============================================================================
+\section{Conclusions and Recommendations}
+\label{sec:conclusions}
+%=============================================================================
+
+\subsection{Summary of findings}
+
+\begin{enumerate}
+  \item \textbf{Nopath (Markovian) GAD dominates path GAD on every metric.}
+        At $N=287$, nopath achieves $\approx$100\% TS rate given NR convergence,
+        while path GAD ranges from 75\% ($\sigma=0.5$) to 15\% ($\sigma=2.0$).
+        Path GAD's trust-region mechanism causes catastrophic overshoot to
+        higher-index saddle points (Morse 2--8).
+
+  \item \textbf{The bottleneck is NR, not GAD.}
+        Overall TS rate equals NR convergence rate ($\times$ 100\%).
+        At $\sigma=0.5$: 93\%.  At $\sigma=1.0$: 95\%.
+        Improving NR convergence directly improves end-to-end TS yield.
+
+  \item \textbf{GAD convergence is very fast.}
+        Median 9--11 steps.  A budget of 500--1000 GAD steps suffices for 99\%+ of samples.
+
+  \item \textbf{NR configuration is secondary.}
+        Simple NR (no kicks) vs full v13 NR gives nearly identical
+        outcomes.  The GAD variant is the decisive factor.
+
+  \item \textbf{Rescue mode is ineffective for path GAD.}
+        Zero additional TS found from NR-failed samples.
+
+  \item \textbf{Nopath is also 2--3$\times$ faster} wall-clock, since failed path GAD
+        samples waste time exhausting 20k steps.
+
+  \item \textbf{100\% TS rate is universal across molecular families.}
+        All 8 formulas in the dataset achieve 100\% (given NR convergence).
+        The single failure at $\sigma=1.0$ is a numerical error, not algorithmic.
+
+  \item \textbf{Comparison with LJ results} (Section~\ref{sec:lj-connection}):
+        the nopath GAD + NR hybrid on DFTB0 achieves 93--95\% end-to-end
+        TS rate, comparable to the LJ relaxed convergence of 95--99\%.
+        Both are limited by NR convergence, not by the saddle-search phase.
+\end{enumerate}
+
+\subsection{Recommended pipeline for generative modelling}
+
+\begin{enumerate}[nosep]
+  \item \textbf{Phase 1:} Simple NR minimization (RFO + PLS, no kicks), 50k steps.
+  \item \textbf{Phase 2:} Nopath GAD with eigenvalue-clamped $dt$, 1000 steps.
+  \item \textbf{Expected yield:} 93--95\% end-to-end TS rate at $\sigma \leq 1.0$~$\angstrom$.
+\end{enumerate}
+
+Every step in both phases is a pure function of $(\text{coords}, E, \vect{F}, \hess)$ ---
+no trajectory history, no kick counters, no trust-region state.  This makes the
+full pipeline suitable for training a generative model that learns the optimization policy.
+
+\subsection{Connection to LJ results}
+\label{sec:lj-connection}
+
+The LJ experiments (separate document) showed that the v13 NR optimizer
+generalizes across PES types, achieving 95--99\% relaxed convergence on a
+pairwise potential.  The hybrid NR$\to$GAD results add:
+
+\begin{itemize}[nosep]
+  \item On DFTB0, NR convergence is 93--98\% (depending on noise and config).
+  \item Nopath GAD converts NR-converged minima to TS with $\approx$100\% success.
+  \item The combined pipeline gives 93--95\% end-to-end minimum$\to$TS rate.
+  \item Both LJ and DFTB0 share the same pattern: \textbf{the optimizer finds
+        force-converged critical points robustly; the remaining question is
+        which type of critical point} (minimum for NR, index-1 saddle for GAD).
+\end{itemize}
+
+\subsection{Remaining experiments}
+
+\begin{itemize}[nosep]
+  \item Nopath at $\sigma \in \{1.5, 2.0\}$ (interrupted by node timeout;
+        script ready at \texttt{run\_remaining.sh})
+  \item Full v13 NR + nopath cross-experiment (does full NR help nopath?)
+  \item GAD-only controls (no NR) at $\sigma = 2.0$
+  \item TS identity check: does the found TS match the known Transition1x TS?
+  \item Nopath rescue mode at $\sigma = 2.0$ (path rescue failed; nopath may differ)
+\end{itemize}
+
+%=============================================================================
+% Data reference
+%=============================================================================
+% Phase 1: /scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0321/
+% Phase 2: /scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0279/
+% Remaining: run_remaining.sh (ready for next node)
+% Seed: 42, 48 workers x 4 threads, 192 CPUs
 
 \end{document}

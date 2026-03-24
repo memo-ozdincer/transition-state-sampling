@@ -1983,6 +1983,8 @@ def run_newton_raphson(
     late_escape_after: int = 15000,      # step threshold for late escape
     late_escape_alpha: float = 0.1,      # displacement magnitude (Å)
     late_escape_cooldown: int = 500,     # steps between late escapes
+    # --- v14 investigation: force-gated strict convergence ---
+    strict_force_gate: bool = False,     # if True, strict convergence also requires force < force_converged
 ) -> Tuple[Dict[str, Any], list]:
     """Newton-Raphson optimization to find energy minimum.
 
@@ -2318,7 +2320,10 @@ def run_newton_raphson(
             n_neg_reliable = int((evals_vib < -spdn_tau_soft).sum().item())
             strict_converged = (n_neg_reliable == 0) and (force_norm < force_converged)
         else:
-            strict_converged = n_neg == 0
+            if strict_force_gate:
+                strict_converged = n_neg == 0 and force_norm < force_converged
+            else:
+                strict_converged = n_neg == 0
 
         relaxed_converged = False
         if relaxed_eval_threshold > 0 and not strict_converged:

@@ -1,0 +1,146 @@
+==========================================================================================
+PHASE 1B INVESTIGATION: Trajectory-Based Analysis
+==========================================================================================
+
+  LJ n0.5_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 82 trajectories (80 converged, 2 non-converged)...
+    Loaded 82/82 trajectories
+  LJ n1.0_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 86 trajectories (80 converged, 6 non-converged)...
+    Loaded 86/86 trajectories
+  LJ n1.5_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 83 trajectories (80 converged, 3 non-converged)...
+    Loaded 83/83 trajectories
+  LJ n2.0_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 81 trajectories (80 converged, 1 non-converged)...
+    Loaded 81/81 trajectories
+  DFTB n0.5_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 83 trajectories (80 converged, 3 non-converged)...
+    Loaded 83/83 trajectories
+  DFTB n1.0_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 87 trajectories (80 converged, 7 non-converged)...
+    Loaded 87/87 trajectories
+  DFTB n1.5_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 90 trajectories (80 converged, 10 non-converged)...
+    Loaded 90/90 trajectories
+  DFTB n2.0_rfo_pls_both_kicks_adaptive_probe_late_50k: loading 100 trajectories (80 converged, 20 non-converged)...
+    Loaded 100/100 trajectories
+
+──────────────────────────────────────────────────────────────────────────────────────────
+ANALYSIS 1B: Convergence Ordering
+──────────────────────────────────────────────────────────────────────────────────────────
+Q: Does force converge before or after eigenvalues?
+   Force threshold = 1e-04, eigenvalue threshold = n_neg=0
+
+    PES noise     n   both  F only nn only neither   med(Δstep)   med F@ nn=0   med nn@ F
+  ───── ─────  ────  ───── ─────── ─────── ───────  ───────────  ────────────  ──────────
+     LJ  n0.5    82      0       2      78       2            —      5.15e-03           1
+     LJ  n1.0    86      0      23      57       6            —      5.86e-03           1
+     LJ  n1.5    83      0      52      28       3            —      6.01e-03           2
+     LJ  n2.0    81      0      73       7       1            —      6.19e-03           5
+   DFTB  n0.5    83      0       0      80       3            —      9.98e-02           —
+   DFTB  n1.0    87      0       0      80       7            —      7.04e-02           —
+   DFTB  n1.5    90      0       0      80      10            —      4.78e-02           —
+   DFTB  n2.0   100      0       0      80      20            —      5.23e-02           —
+
+  Detailed: Force at the moment n_neg first hits 0:
+  LJ:
+    n0.5: n=78, min=2.95e-03, p5=3.21e-03, median=5.15e-03, p95=9.35e-03, max=1.19e-02
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 96.2%
+    n1.0: n=57, min=1.49e-03, p5=2.78e-03, median=5.86e-03, p95=9.76e-03, max=1.23e-02
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 94.7%
+    n1.5: n=28, min=1.98e-03, p5=2.17e-03, median=6.01e-03, p95=8.98e-03, max=1.23e-02
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 96.4%
+    n2.0: n=7, min=2.84e-03, p5=2.88e-03, median=6.19e-03, p95=7.94e-03, max=8.39e-03
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 100.0%
+
+  DFTB:
+    n0.5: n=80, min=9.15e-03, p5=2.03e-02, median=9.98e-02, p95=1.32e+00, max=2.87e+00
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 1.2%
+    n1.0: n=80, min=8.54e-03, p5=1.34e-02, median=7.04e-02, p95=9.05e-01, max=4.88e+00
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 1.2%
+    n1.5: n=80, min=6.98e-03, p5=1.10e-02, median=4.78e-02, p95=6.14e-01, max=2.95e+00
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 3.8%
+    n2.0: n=80, min=3.33e-03, p5=1.24e-02, median=5.23e-02, p95=7.65e-01, max=4.30e+00
+          F̄ < 1e-4: 0.0%, F̄ < 1e-3: 0.0%, F̄ < 1e-2: 5.0%
+
+──────────────────────────────────────────────────────────────────────────────────────────
+ANALYSIS 1C: Ghost Mode Onset (LJ only)
+──────────────────────────────────────────────────────────────────────────────────────────
+Q: At what force level do ghost eigenvalues (|λ| < 1e-4) first appear?
+
+  n0.5: 81 with ghost onset, 1 without ghosts
+    Force at ghost onset: min=3.14e-03, median=6.21e-01, p95=4.56e+04, max=5.04e+06
+    Ghosts appear before force < 1e-4: 100.0%
+    Ghosts appear before force < 1e-3: 100.0%
+    Ghosts appear before force < 1e-2: 71.6%
+  n1.0: 86 with ghost onset, 0 without ghosts
+    Force at ghost onset: min=4.18e-04, median=1.29e-01, p95=2.15e+03, max=9.40e+04
+    Ghosts appear before force < 1e-4: 100.0%
+    Ghosts appear before force < 1e-3: 96.5%
+    Ghosts appear before force < 1e-2: 73.3%
+  n1.5: 83 with ghost onset, 0 without ghosts
+    Force at ghost onset: min=6.75e-05, median=1.81e-02, p95=4.35e+02, max=2.46e+04
+    Ghosts appear before force < 1e-4: 98.8%
+    Ghosts appear before force < 1e-3: 89.2%
+    Ghosts appear before force < 1e-2: 51.8%
+  n2.0: 81 with ghost onset, 0 without ghosts
+    Force at ghost onset: min=1.47e-05, median=1.64e-03, p95=3.29e+02, max=2.83e+04
+    Ghosts appear before force < 1e-4: 93.8%
+    Ghosts appear before force < 1e-3: 66.7%
+    Ghosts appear before force < 1e-2: 28.4%
+
+──────────────────────────────────────────────────────────────────────────────────────────
+ANALYSIS 1F: Hessian Conditioning
+──────────────────────────────────────────────────────────────────────────────────────────
+
+    PES noise     n   med κ_final    med κ_max    med κ_med
+  ───── ─────  ────  ──────────── ──────────── ────────────
+     LJ  n0.5    82      1.67e+03     1.67e+07     4.04e+03
+     LJ  n1.0    86      3.69e+03     9.45e+07     2.84e+04
+     LJ  n1.5    83      3.14e+05     4.55e+08     3.34e+05
+     LJ  n2.0    81      2.27e+06     2.71e+08     1.53e+06
+   DFTB  n0.5    83      3.39e+05     1.56e+07     2.95e+04
+   DFTB  n1.0    87      1.75e+06     9.94e+08     3.70e+05
+   DFTB  n1.5    90      1.29e+07     2.12e+10     3.76e+06
+   DFTB  n2.0   100      5.46e+07     1.43e+12     5.60e+07
+
+==========================================================================================
+KEY FINDINGS (Phase 1B — Trajectory Analysis)
+==========================================================================================
+
+1. CONVERGENCE ORDERING:
+   LJ:
+     n0.5: 78 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n0.5: 2 samples reach F̄<1e-4 but NEVER reach n_neg=0
+     n1.0: 57 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n1.0: 23 samples reach F̄<1e-4 but NEVER reach n_neg=0
+     n1.5: 28 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n1.5: 52 samples reach F̄<1e-4 but NEVER reach n_neg=0
+     n2.0: 7 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n2.0: 73 samples reach F̄<1e-4 but NEVER reach n_neg=0
+   DFTB:
+     n0.5: 80 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n1.0: 80 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n1.5: 80 samples reach n_neg=0 but NEVER reach F̄<1e-4
+     n2.0: 80 samples reach n_neg=0 but NEVER reach F̄<1e-4
+
+2. FORCE AT EIGENVALUE CONVERGENCE (n_neg=0):
+   This is the force the optimizer would declare 'converged' at under strict criterion:
+   LJ n0.5: median F̄ = 5.15e-03 (range 2.95e-03 – 1.19e-02)
+   LJ n1.0: median F̄ = 5.86e-03 (range 1.49e-03 – 1.23e-02)
+   LJ n1.5: median F̄ = 6.01e-03 (range 1.98e-03 – 1.23e-02)
+   LJ n2.0: median F̄ = 6.19e-03 (range 2.84e-03 – 8.39e-03)
+   DFTB n0.5: median F̄ = 9.98e-02 (range 9.15e-03 – 2.87e+00)
+   DFTB n1.0: median F̄ = 7.04e-02 (range 8.54e-03 – 4.88e+00)
+   DFTB n1.5: median F̄ = 4.78e-02 (range 6.98e-03 – 2.95e+00)
+   DFTB n2.0: median F̄ = 5.23e-02 (range 3.33e-03 – 4.30e+00)
+
+3. GHOST MODE ONSET (LJ):
+   n0.5: ghosts appear at median F̄ = 6.21e-01
+   n1.0: ghosts appear at median F̄ = 1.29e-01
+   n1.5: ghosts appear at median F̄ = 1.81e-02
+   n2.0: ghosts appear at median F̄ = 1.64e-03
+
+──────────────────────────────────────────────────────────────────────────────────────────
+Generating plots...
+──────────────────────────────────────────────────────────────────────────────────────────
+
+  /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/investigation/phase1/convergence_ordering.png
+  /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/investigation/phase1/force_at_nneg0.png
+  /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/investigation/phase1/ghost_onset_force.png
+  /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/investigation/phase1/conditioning_comparison.png
+

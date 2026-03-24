@@ -238,6 +238,8 @@ def run_single_sample(
                 late_escape_after=params.get("late_escape_after", 15000),
                 late_escape_alpha=params.get("late_escape_alpha", 0.1),
                 late_escape_cooldown=params.get("late_escape_cooldown", 500),
+                # v14
+                strict_force_gate=params.get("strict_force_gate", False),
             )
         elif method == "pic_arc":
             result, trajectory = run_pic_arc(
@@ -825,6 +827,11 @@ def main() -> None:
         "--late-escape-cooldown", type=int, default=500,
         help="v12b: steps between late escapes (default 500).",
     )
+    parser.add_argument(
+        "--strict-force-gate", action="store_true", default=False,
+        help="v14: require force < force_converged for strict convergence (n_neg=0). "
+             "Prevents premature convergence on PES where eigenvalues converge before forces.",
+    )
 
     # --- PIC-ARC flags ---
     parser.add_argument(
@@ -997,6 +1004,8 @@ def main() -> None:
         "late_escape_after": args.late_escape_after,
         "late_escape_alpha": args.late_escape_alpha,
         "late_escape_cooldown": args.late_escape_cooldown,
+        # v14 investigation
+        "strict_force_gate": args.strict_force_gate,
         # PIC-ARC additions
         "trust_radius_init": args.trust_radius_init,
         "sigma_init": args.sigma_init,
