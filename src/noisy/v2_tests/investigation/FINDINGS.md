@@ -576,8 +576,9 @@ Sample 007: step 0→F=1.3,  step  235→F=0.003(min), step 1000→F=0.102,  ste
 - Then they OSCILLATE in the range [3e-3, 1.4e-1] for the remaining 49,000 steps
 - The minimum F̄ ever achieved across all samples: **3.35e-3** (sample 7 at step 235)
 - **Zero steps below 1e-3** across 200k total steps (all 4 trajectories combined)
-- The kick mechanisms (osc-kick, blind-kick, late-escape) are injecting perturbations
-  that prevent fine-grained convergence in the flat, ill-conditioned basin
+- Kick mechanisms fire extensively (500-800+ osc-kicks per trajectory), but Phase 3D
+  showed that disabling them has NO effect on force behavior — the oscillation is
+  intrinsic to the RFO optimizer on the ill-conditioned DFTB0 PES
 
 #### n=1.0 force trajectories
 
@@ -601,8 +602,8 @@ optimizer genuinely cannot reach lower forces. Likely causes:
 
 1. **Extreme ill-conditioning** (κ ~ 10^7 at n=2.0): the nearly-singular Hessian
    produces poor step directions, especially after RFO augmentation
-2. **Kick mechanisms are counterproductive:** designed to escape saddle points, they
-   inject perturbations that prevent the optimizer from settling into the flat basin
+2. ~~**Kick mechanisms are counterproductive**~~ **RULED OUT (Phase 3D):** disabling
+   all kicks produces identical force behavior (median 4.48e-2 vs 4.51e-2)
 3. **Possible DFTB0 numerical precision limits:** the semi-empirical method may have
    inherent force accuracy limits that prevent sub-1e-3 precision
 
@@ -618,6 +619,51 @@ The `strict_force_gate` at fc=1e-4 gives **100% → 0% convergence on DFTB0**. T
 
 2. **The "universal criterion" proposed in Phase 4 does NOT work on DFTB0.**
    `(F̄ < 1e-4) AND (n_neg_at_τ == 0)` requires force convergence that DFTB0 cannot achieve.
+
+---
+
+## Phase 3D: No-Kicks Experiment (DFTB0)
+
+### Question
+Are the kick mechanisms (osc-kick, blind-kick, late-escape) causing the DFTB0 force
+oscillation? The WITH-kicks experiments showed 500-800+ osc-kicks and 68-90 late-escapes
+per 50k-step trajectory — enough perturbations to plausibly prevent fine convergence.
+
+### Setup
+Same as 3A force-gate, but with ALL kick flags omitted (all default to False):
+- No `--osc-kick`, `--blind-kick`, `--blind-kick-probe`, `--late-escape`
+- `--strict-force-gate` enabled
+- 50k steps, DFTB0
+
+### Results: Kicks are NOT the cause
+
+**n=1.0, sample_000 comparison:**
+
+| Metric | WITH kicks | WITHOUT kicks |
+|--------|-----------|---------------|
+| Total kicks | 987 (839 osc, 78 blind, 70 late) | **0** |
+| Median F̄ | 4.51e-2 | 4.48e-2 |
+| Min F̄ | 4.28e-3 | 4.43e-3 |
+| F < 1e-2 | 1164/50k (2.3%) | 1454/50k (2.9%) |
+| F < 1e-3 | 0 | 0 |
+| Force windows (5k) | 3.9e-2 – 4.5e-2 | 4.2e-2 – 4.9e-2 |
+
+The force behavior is **nearly identical** with and without kicks. The oscillation
+amplitude, floor, and median are all the same within noise. Removing 987 kick
+perturbations made no measurable difference.
+
+### Implication
+
+The DFTB0 force oscillation is **intrinsic to the RFO optimizer operating on an
+ill-conditioned PES** (κ > 10^7), not an artifact of kick mechanisms. The kicks
+were designed to escape saddle points but happen to fire in this regime because the
+oscillation triggers their patience-based heuristics. However, they are effect not
+cause.
+
+**Remaining hypothesis:** The extreme ill-conditioning (near-zero positive eigenvalues
+at ~10^-6) causes the RFO augmented Hessian to produce poor step directions. The
+optimizer makes progress in well-conditioned directions but oscillates in the
+ill-conditioned subspace, keeping the overall force norm at ~3e-3 to 5e-2.
 
 ---
 
@@ -746,12 +792,14 @@ eigenvalue convergence.
 2. **ANSWERED: Does the force gate work on LJ n=1.0?** Yes, even better than n=2.0.
    32/48 (67%) achieve genuine dual convergence (n_neg=0 + F̄ < 1e-4). See Phase 3B.
 
-3. **Would disabling kick mechanisms improve DFTB0 force convergence?** The oscillatory
-   force trajectories suggest the kick mechanisms (osc-kick, blind-kick, late-escape)
-   are preventing convergence. A control experiment without kicks could clarify.
+3. **ANSWERED: Do kick mechanisms cause DFTB0 force oscillation?** No. Experiment 3D
+   (no kicks) shows nearly identical force behavior: median F̄ = 4.48e-2 vs 4.51e-2
+   with kicks, min F̄ = 4.43e-3 vs 4.28e-3. Zero steps below 1e-3 in either case.
+   The oscillation is intrinsic to the optimizer + PES interaction, not kick-induced.
 
 4. **Would a preconditioner help DFTB0?** κ > 10^7 at n=2.0 means step quality is
    degraded. A preconditioner addressing the nearly-singular Hessian might help.
+   This is the most promising remaining avenue given that kick disabling had no effect.
 
 5. **Are "relaxed-converged" LJ geometries at true minima?** Ghost eigenvalues could
    mask genuine negative curvature. Need IRC or energy perturbation analysis.
@@ -790,7 +838,7 @@ each poorly in its own way:
    Options for DFTB0:
    - Keep current behavior (eigenvalue-only strict convergence)
    - Use a PES-specific force threshold (e.g., fc=1e-2)
-   - Investigate disabling kick mechanisms to reduce force oscillation
+   - ~~Investigate disabling kick mechanisms~~ (Phase 3D: no effect)
    - Implement Hessian preconditioning to address κ > 10^7
 
 3. **Set eigenvalue tolerance τ = 5e-4 for LJ.** This captures 96.5% at n=2.0
@@ -837,6 +885,7 @@ force-gate on LJ, eigenvalue-only on DFTB0.
   - `3A_dftb_n{1.0,2.0}_{control,forcegate}/` — DFTB0 experiments
   - `3B_lj_n{1.0,2.0}_{control,forcegate}/` — LJ force-gate experiments
   - `3C_lj_n2.0_fc{1e-5,1e-6}/` — LJ tight force threshold experiments
+  - `3D_dftb_n{1.0,2.0}_forcegate_nokicks/` — No-kicks control experiments
 
 ### Plots (Phase 1)
 - `threshold_sweep_heatmap.png` — 2D force×eigenvalue convergence rates

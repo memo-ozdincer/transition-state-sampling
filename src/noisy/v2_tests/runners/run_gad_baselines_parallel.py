@@ -15,9 +15,8 @@ New in v2:
   sample count as converged?"  Values < 1 would mean we've overshot into
   a minimum; values > 1 mean we're still above index-1.
 
-  Separately, the existing ts_eps criterion
-  (eig_product = λ_0 * λ_1 < -ts_eps)
-  is the actual algorithmic gate and is unchanged.
+  The eigenvalue product (eig_product = λ_0 * λ_1) is logged as a
+  diagnostic but is NOT the convergence gate.  Convergence is n_neg == 1.
 
 - Negative eigenvalue magnitude logging: at convergence (or failure) the
   runner records:
@@ -298,15 +297,9 @@ def run_gad_baseline(
 ) -> Dict[str, Any]:
     """Run one GAD trajectory.
 
-    tr_filter_eig: if True, use the old tr_threshold masking for picking eig0/eig1
-        and for the convergence gate.  Near-zero modes (|λ| < tr_threshold) are
-        excluded before computing eig_product = evals_vib[0] * evals_vib[1], which
-        prevents soft modes leaking through Eckart projection from suppressing the
-        product below the -ts_eps gate.
-
-        If False (new default), the raw vibrational eigenvalues from get_vib_evals_evecs
-        are used unfiltered.  Small residual modes may cause eig_product ≈ 0 even at a
-        true TS, which inflates the gap ratio and suppresses the strict success rate.
+    tr_filter_eig: DEPRECATED / UNUSED.  Previously controlled tr_threshold masking
+        for eigenvalue classification.  Now ignored: convergence uses n_neg == 1 on
+        unfiltered Eckart-projected eigenvalues.  Kept for CLI backward-compatibility.
 
     v3 improvements (Newton-GAD):
         step_mode: "first_order" (classic unit-vector GAD) or "newton_gad"
@@ -406,23 +399,10 @@ def run_gad_baseline(
             # Always keep the full unfiltered eigenvalue tensor for cascade/spectrum logging.
             evals_vib_full = evals_vib
 
-            if tr_filter_eig:
-                # Legacy mode: filter out near-zero modes before picking climbing mode
-                # and computing eig_product (matches old implementation exactly).
-                vib_mask = _vib_mask_from_evals(evals_vib, tr_threshold)
-                vib_indices = torch.where(vib_mask)[0]
-                if int(vib_indices.numel()) == 0:
-                    evals_vib_conv = evals_vib
-                    candidate_indices = torch.arange(min(8, evecs_vib_3N.shape[1]), device=evecs_vib_3N.device)
-                else:
-                    evals_vib_conv = evals_vib[vib_mask]
-                    candidate_indices = vib_indices[:min(8, int(vib_indices.numel()))]
-                V = evecs_vib_3N[:, candidate_indices]
-            else:
-                # New mode: raw vibrational eigenvalues, no threshold filtering.
-                evals_vib_conv = evals_vib
-                n_candidates = min(8, int(evals_vib.numel()))
-                V = evecs_vib_3N[:, :n_candidates]
+            # No tr_threshold filtering: use ALL vibrational eigenvalues from Eckart projection.
+            evals_vib_conv = evals_vib
+            n_candidates = min(8, int(evals_vib.numel()))
+            V = evecs_vib_3N[:, :n_candidates]
 
             v_prev_local = v_prev.to(device=forces.device, dtype=forces.dtype).reshape(-1) if (track_mode and v_prev is not None) else None
             v_new, mode_index, _overlap = pick_tracked_mode(V, v_prev_local, k=int(V.shape[1]))
@@ -486,10 +466,10 @@ def run_gad_baseline(
                 vib_evecs_full=evecs_vib_3N,
             )
 
-        # Convergence check: eig_product < -ts_eps means λ_0 < 0 and λ_1 > 0,
-        # i.e. we have exactly one negative mode (Morse index = 1 = transition state).
-        if stop_at_ts and np.isfinite(eig_product) and eig_product < -abs(ts_eps):
-            final_morse_index = neg_vib_count
+        # Primary convergence criterion: Morse index == 1 (exactly one negative eigenvalue).
+        # The eigenvalue product cascade is logged separately as diagnostics.
+        if stop_at_ts and neg_vib_count == 1:
+            final_morse_index = 1
 
             # --- Cascade evaluation and eigenvalue diagnostics at convergence ---
             ev_full = evals_vib_full
@@ -1000,21 +980,19 @@ def main() -> None:
     parser.add_argument("--max-atom-disp", type=float, default=1.3)
     parser.add_argument("--min-interatomic-dist", type=float, default=0.5)
     parser.add_argument("--ts-eps", type=float, default=1e-5,
-                        help="Convergence threshold: eig_product = λ_0*λ_1 < -ts_eps declares a TS. "
-                             "Smaller → stricter (requires larger gap between λ_0 < 0 and λ_1 > 0). "
-                             "Larger → more permissive (accepts smaller sign separation).")
+                        help="Legacy threshold (diagnostic only). Convergence gate is n_neg == 1 "
+                             "(Morse index 1 on Eckart-projected Hessian). eig_product cascade "
+                             "is logged at convergence for analysis but does not gate convergence.")
     parser.add_argument("--tr-threshold", type=float, default=8e-3,
-                        help="Eigenvalue magnitude threshold. When --tr-filter-eig is enabled, "
-                             "modes with |λ| < tr_threshold are excluded from eig0/eig1 and "
-                             "eig_product computation (legacy behaviour). Always used as diagnostic "
-                             "threshold for TR residual monitoring.")
+                        help="DEPRECATED. Previously filtered near-zero eigenvalues before "
+                             "convergence check. Now ignored: convergence uses n_neg == 1 on "
+                             "unfiltered Eckart-projected eigenvalues. Kept for CLI compatibility.")
     parser.add_argument(
         "--tr-filter-eig",
         action="store_true",
         default=False,
-        help="Legacy mode: filter near-zero modes (|λ| < tr_threshold) before computing "
-             "eig_product for the convergence gate. Matches old implementation. "
-             "When off (default), raw vibrational eigenvalues are used unfiltered.",
+        help="DEPRECATED. Previously enabled tr_threshold filtering for convergence. "
+             "Now ignored: convergence is always n_neg == 1 with no filtering.",
     )
 
     parser.add_argument(
@@ -1181,7 +1159,7 @@ def main() -> None:
             n_le1 = ct.get("n_neg_le1_at_thr", {}).get(key, "?")
             r_le1 = ct.get("rate_le1_at_thr", {}).get(key, float("nan"))
             print(f"  {thr:<18} {n_eq1:>10} {r_eq1:>10.3f} {n_le1:>10} {r_le1:>10.3f}")
-        print(f"\n  Strict success rate (eig_product criterion): {metrics['success_rate']:.3f}")
+        print(f"\n  Strict success rate (n_neg == 1 criterion): {metrics['success_rate']:.3f}")
 
         def _fmt(v: float) -> str:
             return f"{v:.5f}" if math.isfinite(v) else "nan"

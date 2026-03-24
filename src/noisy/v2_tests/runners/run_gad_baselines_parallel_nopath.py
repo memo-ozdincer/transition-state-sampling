@@ -274,15 +274,11 @@ def run_gad_baseline(
                 hess_proj = prepare_hessian(hess_proj, num_atoms)
 
         evals, evecs = torch.linalg.eigh(hess_proj)
-        vib_mask = _vib_mask_from_evals(evals, tr_threshold)
-        vib_indices = torch.where(vib_mask)[0]
 
-        if int(vib_indices.numel()) == 0:
-            evals_vib = evals
-            candidate_indices = torch.arange(min(8, evecs.shape[1]), device=evecs.device)
-        else:
-            evals_vib = evals[vib_mask]
-            candidate_indices = vib_indices[: min(8, int(vib_indices.numel()))]
+        # No tr_threshold filtering: use ALL eigenvalues from Eckart-projected Hessian.
+        # Near-zero eigenvalues from TR projection are kept (they are ~0 by construction).
+        evals_vib = evals
+        candidate_indices = torch.arange(min(8, evecs.shape[1]), device=evecs.device)
 
         last_evals_vib = evals_vib.detach()
 
@@ -360,13 +356,24 @@ def run_gad_baseline(
                 mode_index=mode_index,
             )
 
-        if stop_at_ts and np.isfinite(eig_product) and eig_product < -abs(ts_eps):
-            final_morse_index = int((evals_vib < -float(tr_threshold)).sum().item()) if int(evals_vib.numel()) > 0 else -1
+        # Primary convergence criterion: Morse index == 1 (exactly one negative eigenvalue)
+        n_neg = int((evals_vib < 0).sum().item()) if int(evals_vib.numel()) > 0 else 0
+        if stop_at_ts and n_neg == 1:
+            final_morse_index = 1
+
+            # Log eigenvalue product cascade as diagnostics
+            eig_product_cascade = {}
+            if int(evals_vib.numel()) >= 2:
+                ep = float(evals_vib[0].item()) * float(evals_vib[1].item())
+                for eps_label, eps_val in [("1e-3", 1e-3), ("1e-5", 1e-5), ("1e-8", 1e-8)]:
+                    eig_product_cascade[f"eig_product_lt_neg_{eps_label}"] = bool(np.isfinite(ep) and ep < -eps_val)
+
             result = {
                 "converged": True,
                 "converged_step": step,
                 "final_morse_index": final_morse_index,
                 "total_steps": step + 1,
+                "eig_product_cascade": eig_product_cascade,
             }
             if logger is not None:
                 logger.finalize(
@@ -392,7 +399,7 @@ def run_gad_baseline(
         coords = new_coords.detach()
 
     if last_evals_vib is not None and int(last_evals_vib.numel()) > 0:
-        final_morse_index = int((last_evals_vib < -float(tr_threshold)).sum().item())
+        final_morse_index = int((last_evals_vib < 0).sum().item())
     else:
         final_morse_index = -1
 
@@ -592,8 +599,10 @@ def main() -> None:
     )
     parser.add_argument("--max-atom-disp", type=float, default=0.35)
     parser.add_argument("--min-interatomic-dist", type=float, default=0.5)
-    parser.add_argument("--ts-eps", type=float, default=1e-5)
-    parser.add_argument("--tr-threshold", type=float, default=1e-6)
+    parser.add_argument("--ts-eps", type=float, default=1e-5,
+                        help="DEPRECATED diagnostic only. Convergence is n_neg == 1.")
+    parser.add_argument("--tr-threshold", type=float, default=1e-6,
+                        help="DEPRECATED. No eigenvalue filtering; only Eckart projection.")
 
     parser.add_argument(
         "--project-gradient-and-v",

@@ -99,7 +99,7 @@ def plot_trajectory(traj_path: Path, output_dir: Path) -> None:
     ax2_r.tick_params(axis="y", labelcolor="tab:purple")
     max_mi = float(np.nanmax(morse_index)) if np.any(np.isfinite(morse_index)) else 2
     ax2_r.set_ylim(-0.5, max(max_mi, 2) + 0.5)
-    ax2.set_title("TS Criterion (eig_product < 0) and Morse Index")
+    ax2.set_title("TS Criterion (n_neg == 1) and Morse Index")
     ax2.grid(True, alpha=0.3)
 
     # ---- Panel 3: Trust radius vs actual step displacement (mirrors NR plot) ----

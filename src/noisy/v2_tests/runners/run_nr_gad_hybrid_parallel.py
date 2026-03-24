@@ -10,7 +10,8 @@ Phase 1 — Newton-Raphson minimization (v13 with all bells and whistles)
 
 Phase 2 — GAD saddle search from the converged minimum
   Climbs from the minimum to an index-1 saddle point.
-  Convergence: λ₀ × λ₁ < -ts_eps.
+  Convergence: n_neg == 1 (Morse index 1) on Eckart-projected Hessian.
+  No tr_threshold filtering — only Eckart projection removes TR modes.
 
 Two GAD variants:
   --gad-variant path     Path-based trust-region GAD (all bells and whistles)

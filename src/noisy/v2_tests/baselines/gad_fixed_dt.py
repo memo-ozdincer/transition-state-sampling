@@ -69,15 +69,9 @@ def _step_metrics(
 
     evals, evecs = torch.linalg.eigh(hess)
 
-    vib_mask = _vib_mask_from_evals(evals, tr_threshold)
-    vib_indices = torch.where(vib_mask)[0]
-
-    if len(vib_indices) == 0:
-        evals_vib = evals
-        candidate_indices = torch.arange(min(k_track, evecs.shape[1]), device=evecs.device)
-    else:
-        evals_vib = evals[vib_mask]
-        candidate_indices = vib_indices[:min(k_track, len(vib_indices))]
+    # No tr_threshold filtering: use ALL eigenvalues from Eckart-projected Hessian.
+    evals_vib = evals
+    candidate_indices = torch.arange(min(k_track, evecs.shape[1]), device=evecs.device)
 
     V = evecs[:, candidate_indices].to(device=forces.device, dtype=forces.dtype)
     if track_mode:
@@ -93,7 +87,7 @@ def _step_metrics(
 
     eig0 = float(evals_vib[0].item()) if len(evals_vib) >= 1 else float("nan")
     eig1 = float(evals_vib[1].item()) if len(evals_vib) >= 2 else float("nan")
-    neg_vib = int((evals_vib < -tr_threshold).sum().item()) if len(evals_vib) > 0 else -1
+    neg_vib = int((evals_vib < 0).sum().item()) if len(evals_vib) > 0 else -1
 
     v_next = v.detach().clone().reshape(-1) if track_mode else None
     return gad_vec, eig0, eig1, neg_vib, v_next, overlap, int(j)
@@ -214,8 +208,8 @@ def run_gad_fixed_dt(
                 x_disp_window=x_disp_window,
             )
 
-        # Check for TS (index = 1)
-        if stop_at_ts and np.isfinite(eig_product) and eig_product < -abs(ts_eps):
+        # Check for TS: Morse index == 1 (exactly one negative eigenvalue)
+        if stop_at_ts and neg_vib == 1:
             converged = True
             converged_step = step
             break

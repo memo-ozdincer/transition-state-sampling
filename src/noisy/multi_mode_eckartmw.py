@@ -185,15 +185,9 @@ def _step_metrics_from_projected_hessian(
     # IMPORTANT: keep indices on the same device as `evecs`.
     # When `eigh_device == 'cpu'`, `evecs` is on CPU; GPU indices will error.
     evals_local = evals.to(dtype=torch.float32)
-    vib_mask = _vib_mask_from_evals(evals_local, tr_threshold=tr_threshold)
-    vib_indices = torch.where(vib_mask)[0]
-
-    if int(vib_indices.numel()) == 0:
-        evals_vib = evals_local
-        candidate_indices = torch.arange(min(int(k_track), int(evecs.shape[1])), device=evecs.device)
-    else:
-        evals_vib = evals_local[vib_mask]
-        candidate_indices = vib_indices[: int(min(int(k_track), int(vib_indices.numel())))]
+    # No tr_threshold filtering: use ALL eigenvalues from Eckart-projected Hessian.
+    evals_vib = evals_local
+    candidate_indices = torch.arange(min(int(k_track), int(evecs.shape[1])), device=evecs.device)
 
     V = evecs[:, candidate_indices].to(device=forces.device, dtype=forces.dtype)
     v_prev_local = v_prev.to(device=forces.device, dtype=forces.dtype).reshape(-1) if v_prev is not None else None
@@ -1002,8 +996,8 @@ def run_multi_mode_escape(
         trajectory.setdefault("mode_overlap", []).append(float(mode_overlap))
         trajectory.setdefault("mode_index", []).append(int(mode_index))
 
-        # Check for TS (index = 1)
-        if stop_at_ts and steps_to_ts is None and np.isfinite(eig_prod) and eig_prod < -abs(ts_eps):
+        # Check for TS: Morse index == 1 (exactly one negative eigenvalue)
+        if stop_at_ts and steps_to_ts is None and neg_vib == 1:
             steps_to_ts = total_steps
             trajectory["dt_eff"].append(float("nan"))
             break

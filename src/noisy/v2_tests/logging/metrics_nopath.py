@@ -254,8 +254,8 @@ def compute_extended_metrics(
     else:
         eig_gap_12 = float("nan")
 
-    # Morse index (count negative vibrational eigenvalues)
-    neg_mask = vib_evals < -tr_threshold
+    # Morse index (count negative vibrational eigenvalues — no threshold, just < 0)
+    neg_mask = vib_evals < 0
     morse_index_computed = int(neg_mask.sum().item())
     neg_eig_sum = float(vib_evals[neg_mask].sum().item()) if neg_mask.any() else 0.0
 
@@ -377,7 +377,7 @@ def compute_morse_index(
     vib_mask = torch.abs(evals) > tr_threshold
     vib_evals = evals[vib_mask]
 
-    return int((vib_evals < -tr_threshold).sum().item())
+    return int((vib_evals < 0).sum().item())
 
 
 def compute_singularity_proximity(

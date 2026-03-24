@@ -252,7 +252,7 @@ def compute_extended_metrics(
         else:
             vib_evals_use = evals_full[vib_indices]
             vib_evecs_use = evecs_full[:, vib_indices]
-        neg_mask = vib_evals_use < -tr_threshold
+        neg_mask = vib_evals_use < 0
 
     # Extract first 6 eigenvalues (or fewer if not available)
     n_avail = min(n_eigs_to_compute, int(vib_evals_use.numel()))

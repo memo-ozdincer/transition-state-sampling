@@ -6,12 +6,7 @@
       "Bash(squeue -u memoozd -j 1221710 --format=\"%.18i %.9P %.20j %.8u %.2t %.10M %.6D %R\")",
       "Bash(ssh tri0107:*)",
       "Read(//scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0321/**)",
-      "Bash(python3 -c \":*)",
-      "Bash(source /project/rrg-aspuru/memoozd/ts-tools/.venv/bin/activate)",
-      "Bash(export PYTHONPATH=\"/project/rrg-aspuru/memoozd/ts-tools:$PYTHONPATH\")",
-      "Bash(export OMP_NUM_THREADS=2)",
-      "Bash(export OPENBLAS_NUM_THREADS=2)",
-      "Bash(export MKL_NUM_THREADS=2)"
+      "Bash(python3 -c \":*)"
     ]
   }
 }

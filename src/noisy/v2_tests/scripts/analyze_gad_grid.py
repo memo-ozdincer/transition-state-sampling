@@ -501,7 +501,7 @@ def print_cascade_table(cross: Dict[str, Any]) -> None:
 
     print("")
     print("  Columns = eval threshold T (accept if n_neg_at_T == 1 or <= 1).")
-    print("  'strict' = optimizer's own eig_product < -ts_eps gate.")
+    print("  'strict' = optimizer's own n_neg == 1 gate (was eig_product < -ts_eps before fix).")
     print("  Large gap (eq1[T=2e-3] >> eq1[T=0]) → false-rejection problem.")
     print("  Large le1-eq1 difference → optimizer overshooting into minimums.")
     print("  gap ratio >> 1 at success → TS eigenvalue clearly separated from noise.")

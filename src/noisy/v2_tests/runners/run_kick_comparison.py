@@ -275,8 +275,8 @@ def run_gad_with_kick_strategy(
                     tr_threshold=tr_threshold,
                 )
 
-            # Check for TS (index = 1)
-            if stop_at_ts and np.isfinite(eig_product) and eig_product < -abs(ts_eps):
+            # Check for TS: Morse index == 1 (exactly one negative eigenvalue)
+            if stop_at_ts and neg_vib == 1:
                 result = KickComparisonResult(
                     strategy=kick_strategy_name,
                     sample_id=sample_id,
