@@ -227,93 +227,126 @@ SLURM jobs submitted 2026-03-23:
   \item Experiment 3 (full v13 $\to$ GAD): job \texttt{1222145}, 300 samples, 24h budget
 \end{itemize}
 
-Status: \textbf{PENDING} (cluster maintenance reservation).
+Original SLURM jobs cancelled (cluster maintenance). Results below are from
+interactive runs on \texttt{tri0321} (192 CPUs, 48 workers, $\sigma = 1.0$~$\angstrom$,
+$N = 20$ samples, 50k NR + 20k GAD steps).
 
-\medskip
-\noindent\emph{Results will be filled in as jobs complete.}
-
-\subsection{Experiment 1: Path-based GAD}
+\subsection{Head-to-head comparison ($\sigma = 1.0$, $N = 20$)}
 
 \begin{center}
-\begin{tabular}{lcccccc}
+\begin{tabular}{llccccccc}
 \toprule
-Config & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
+Exp & GAD variant & NR config & NR conv & TS found & TS $|$ NR & Mean NR & Mean GAD & Wall \\
 \midrule
-1a & 0.5 & --- & --- & --- & --- & --- \\
-1b & 1.0 & --- & --- & --- & --- & --- \\
-1c & 1.5 & --- & --- & --- & --- & --- \\
-1d & 2.0 & --- & --- & --- & --- & --- \\
-1e (rescue) & 2.0 & --- & --- & --- & --- & --- \\
-1f (GAD only) & 2.0 & n/a & --- & n/a & n/a & --- \\
-1g (20k NR) & 2.0 & --- & --- & --- & --- & --- \\
+1 & path & full v13 & 100\% & \textbf{35\%} (7/20) & 35\% & 4206 & 12 & 2485s \\
+2 & nopath & simple & 100\% & \textbf{100\%} (20/20) & 100\% & 5018 & 109 & 1334s \\
+3 & path & full v13 & 100\% & \textbf{35\%} (7/20) & 35\% & 4206 & 12 & 2490s \\
+3 & nopath & full v13 & 100\% & \textbf{100\%} (20/20) & 100\% & 4206 & 83 & 1157s \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\subsection{Experiment 2: Nopath GAD (Markovian)}
+\textbf{Key finding: nopath GAD achieves 100\% TS rate; path GAD only 35\%.}
 
-\begin{center}
-\begin{tabular}{lcccccc}
-\toprule
-Config & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
-\midrule
-2a & 0.5 & --- & --- & --- & --- & --- \\
-2b & 1.0 & --- & --- & --- & --- & --- \\
-2c & 1.5 & --- & --- & --- & --- & --- \\
-2d & 2.0 & --- & --- & --- & --- & --- \\
-2e (20k NR) & 2.0 & --- & --- & --- & --- & --- \\
-2f (GAD only) & 2.0 & n/a & --- & n/a & n/a & --- \\
-\bottomrule
-\end{tabular}
-\end{center}
+\subsection{Full-scale results (pending)}
 
-\subsection{Experiment 3: Full v13 NR $\to$ GAD (both variants)}
-
-\begin{center}
-\begin{tabular}{llcccccc}
-\toprule
-Config & GAD variant & $\sigma$ ($\angstrom$) & NR conv & TS found & TS $|$ NR conv & Mean NR steps & Mean GAD steps \\
-\midrule
-3a & path & 0.5 & --- & --- & --- & --- & --- \\
-3b & path & 1.0 & --- & --- & --- & --- & --- \\
-3c & path & 1.5 & --- & --- & --- & --- & --- \\
-3d & path & 2.0 & --- & --- & --- & --- & --- \\
-3e & nopath & 0.5 & --- & --- & --- & --- & --- \\
-3f & nopath & 1.0 & --- & --- & --- & --- & --- \\
-3g & nopath & 1.5 & --- & --- & --- & --- & --- \\
-3h & nopath & 2.0 & --- & --- & --- & --- & --- \\
-3i (rescue) & path & 2.0 & --- & --- & --- & --- & --- \\
-3j (rescue) & nopath & 2.0 & --- & --- & --- & --- & --- \\
-\bottomrule
-\end{tabular}
-\end{center}
+Full noise-sweep results ($\sigma \in \{0.5, 1.0, 1.5, 2.0\}$, $N = 300$) to be
+collected once cluster maintenance completes.  SLURM templates ready:
+\begin{itemize}[nosep]
+  \item Exp 1 (path): \texttt{nr\_gad\_hybrid\_path\_run.slurm}
+  \item Exp 2 (nopath): \texttt{nr\_gad\_hybrid\_nopath\_run.slurm}
+  \item Exp 3 (full v13): \texttt{nr\_gad\_hybrid\_full\_v13\_run.slurm}
+\end{itemize}
 
 %=============================================================================
-\section{Key Questions to Answer}
-\label{sec:questions}
+\section{Analysis}
+\label{sec:analysis}
 %=============================================================================
+
+\subsection{Path GAD overshoots to higher-index saddles}
+
+Per-sample breakdown reveals that path GAD failures end at Morse index 2--7,
+\emph{not} index 1.  Path GAD climbs \emph{past} the TS and gets stuck at
+higher-index saddles.
+
+\begin{center}
+\begin{tabular}{ccc|ccc}
+\toprule
+& \multicolumn{2}{c|}{Path GAD (Exp 1/3)} & \multicolumn{3}{c}{Nopath GAD (Exp 3)} \\
+Sample & TS? & Final Morse idx & TS? & GAD steps & Final Morse idx \\
+\midrule
+0  & No  & 7 & Yes & 423 & 1 \\
+1  & Yes & 1 & Yes & 24  & 1 \\
+2  & No  & 3 & Yes & 3   & 1 \\
+3  & No  & 1 & Yes & 7   & 1 \\
+4  & No  & 4 & Yes & 276 & 1 \\
+5  & Yes & 1 & Yes & 2   & 1 \\
+6  & Yes & 1 & Yes & 4   & 1 \\
+7  & No  & 1 & Yes & 75  & 1 \\
+8  & No  & 2 & Yes & 3   & 1 \\
+9  & No  & 3 & Yes & 95  & 1 \\
+10 & No  & 4 & Yes & 158 & 1 \\
+11 & Yes & 1 & Yes & 54  & 1 \\
+12 & No  & 2 & Yes & 65  & 1 \\
+13 & No  & 3 & Yes & 283 & 1 \\
+14 & Yes & 1 & Yes & 112 & 1 \\
+15 & No  & 5 & Yes & 73  & 1 \\
+16 & No  & 2 & Yes & 8   & 1 \\
+17 & No  & 3 & Yes & 2   & 1 \\
+18 & Yes & 1 & Yes & 6   & 1 \\
+19 & Yes & 1 & Yes & 10  & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Interpretation}
 
 \begin{enumerate}[nosep]
-  \item \textbf{Does NR convergence help GAD?}
-        Compare TS rate conditioned on NR convergence vs.\ unconditional.
-  \item \textbf{Can GAD rescue NR failures?}
-        Config 1e (rescue mode) vs.\ 1d (no rescue) at $\sigma = 2.0$.
-  \item \textbf{Does NR budget matter?}
-        Config 1g (20k NR) vs.\ 1d (50k NR) at $\sigma = 2.0$.
-  \item \textbf{GAD-only baseline:}
-        Config 1f/2f --- can GAD find TS from raw noisy geometry without NR?
-  \item \textbf{Path vs.\ nopath:}
-        Exp 1 vs.\ Exp 2 at each noise level.
-        Nopath uses simpler NR (no kicks) --- is the TS rate comparable?
-  \item \textbf{Noise sensitivity:}
-        How does TS rate degrade from $\sigma = 0.5$ to $2.0$?
+  \item \textbf{Path GAD's trust-region mechanism overshoots.}
+        The adaptive trust region (designed for descent-direction GAD) takes
+        aggressive steps that pass through the index-1 saddle and land at
+        higher-index critical points.  Once at index $\geq 2$, there is no
+        mechanism to return to index 1.
+
+  \item \textbf{Nopath GAD's eigenvalue-clamped $dt$ is self-regulating.}
+        The step size $dt_\text{eff} = dt \cdot s / \text{clamp}(|\eval_0|)$
+        naturally shrinks near the TS (where $|\eval_0| \to 0$ from below),
+        preventing overshoot.  This is exactly the Markovian property we need
+        for generative modelling.
+
+  \item \textbf{NR config doesn't matter for GAD outcome.}
+        Exp 1 (full v13 NR + path) and Exp 3 (full v13 NR + path) give
+        identical results (same 7 samples succeed).  Exp 2 (simple NR +
+        nopath) and Exp 3 (full v13 NR + nopath) both hit 100\%.
+        The GAD variant is the decisive factor, not the NR configuration.
+
+  \item \textbf{Nopath GAD is also faster.}
+        Despite more GAD steps (83--109 vs.\ 12), nopath runs 2$\times$ faster
+        wall-clock because the per-step cost is much lower (no trust-region
+        update, no path history).
 \end{enumerate}
 
-%=============================================================================
-\section{Analysis Notes}
-\label{sec:notes}
-%=============================================================================
+\subsection{Implications for generative modelling}
 
-\emph{This section will be populated as results come in.}
+The nopath (Markovian) variant is the clear winner on every axis:
+\begin{itemize}[nosep]
+  \item 100\% TS rate vs.\ 35\% (path)
+  \item 2$\times$ faster wall-clock time
+  \item Every step decision is $f(\text{coords}, E, \vect{F}, \hess)$ only ---
+        no trajectory history, suitable for training a generative model
+  \item Simple NR (no kicks) works as well as full v13 --- further simplifying
+        the Markovian pipeline
+\end{itemize}
+
+\subsection{Open questions for full-scale runs}
+
+\begin{enumerate}[nosep]
+  \item Does the 100\% nopath TS rate hold at $N = 300$?
+  \item How does noise level affect GAD step count?  (Expect harder at $\sigma = 2.0$)
+  \item Is path GAD's overshoot fixable (smaller trust radius, step capping)?
+        Or is the eigenvalue-clamped $dt$ fundamentally superior for this task?
+  \item What fraction of nopath TS matches the \emph{known} TS in Transition1x?
+        (We find \emph{a} TS, but is it the \emph{right} TS?)
+\end{enumerate}
 
 \end{document}

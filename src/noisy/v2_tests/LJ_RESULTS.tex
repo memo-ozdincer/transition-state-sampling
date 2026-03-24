@@ -140,18 +140,30 @@ $n{=}2.0$\,\AA.
 \subsection{Convergence criteria}
 
 \begin{description}[nosep]
-  \item[\color{successgreen}Strict:] $\norm{\vect{f}}_\text{mean}
-    < \varepsilon$ \textbf{and} $n_\text{neg} = 0$ \quad
-    (no negative vibrational eigenvalues)
-  \item[\color{ljblue}Relaxed:] $\norm{\vect{f}}_\text{mean}
-    < \varepsilon$ \textbf{and} $\lambda_\text{min} \geq -0.01$ \quad
-    (eigenvalues within $\sqrt{\varepsilon}$ of zero are accepted)
+  \item[\color{successgreen}Strict:] $n_\text{neg} = 0$ \quad
+    (no negative vibrational eigenvalues; \textbf{no force check})
+  \item[\color{ljblue}Relaxed:] $\bar{F} < \varepsilon$ \textbf{and}
+    $\lambda_\text{min} \geq -\tau$ \quad
+    (force converged \emph{and} eigenvalues within threshold)
 \end{description}
 
 \noindent
-The relaxed threshold $\sqrt{\varepsilon} = \sqrt{10^{-4}} = 0.01$ follows
-from the $\varepsilon^{1/2}$ second-order optimality theorem
-(Boumal et al.): an RFO-type method guarantees
+where $\bar{F} = N_\text{atoms}^{-1}\sum_i \norm{\vect{f}_i}$ is the
+mean per-atom force norm, $\varepsilon = 10^{-4}$\,eV/\AA, and
+$\tau = 0.01$.
+
+\begin{remark}
+Strict convergence fires as soon as all vibrational eigenvalues become
+positive---\textbf{without waiting for force convergence}.  Relaxed
+convergence requires the force to drop below $\varepsilon$ first.
+Counterintuitively, relaxed-converged samples are more thoroughly
+force-optimized than strict ones (Section~\ref{sec:force-stats}).
+\end{remark}
+
+\noindent
+The relaxed threshold $\tau = \sqrt{\varepsilon} = 0.01$ follows from the
+$\varepsilon^{1/2}$ second-order optimality theorem (Boumal et al.):
+an approximate second-order method guarantees
 $\lambda_\text{min} \geq -C\sqrt{\varepsilon}$.
 
 \subsection{Key parameters}
@@ -163,8 +175,8 @@ $\lambda_\text{min} \geq -C\sqrt{\varepsilon}$.
 Parameter & Value & Purpose \\
 \midrule
 Calculator & LJ (UFF, $\sigma/3$) & PES evaluation \\
-Force convergence $\varepsilon$ & $10^{-4}$\,eV/\AA & first-order criterion \\
-Relaxed threshold $\tau$ & 0.01 & second-order criterion \\
+Force convergence $\varepsilon$ & $10^{-4}$\,eV/\AA & mean per-atom $\bar{F} = N^{-1}\sum_i\norm{\vect{f}_i}$ \\
+Relaxed eval.\ threshold $\tau$ & 0.01 & $= \sqrt{\varepsilon}$ (second-order bound) \\
 Max atom displacement & 1.3\,\AA & initial trust radius \\
 Trust radius floor & 0.01\,\AA & prevents TR collapse \\
 Min interatomic distance & 0.5\,\AA & rejects unphysical steps \\
@@ -252,6 +264,34 @@ minima on a fundamentally different PES---the ``failures'' are a
 \emph{criterion problem}, not an optimizer problem.
 \end{tcolorbox}
 
+\subsubsection{Force convergence at the solution}
+\label{sec:force-stats}
+
+Because strict convergence requires only $n_\text{neg}{=}0$ (no force
+check), strict- and relaxed-converged samples have very different
+force profiles:
+
+\begin{center}\small
+\begin{tabular}{lccc}
+\toprule
+& \textbf{Strict} & \textbf{Relaxed} & \textbf{Unconverged} \\
+\midrule
+Force check applied?      & No              & Yes ($<10^{-4}$) & --- \\
+Median $\bar{F}$ (eV/\AA) & $5.5 \times 10^{-3}$ & $9.5 \times 10^{-5}$ & $7.5 \times 10^{-4}$ \\
+Range of $\bar{F}$        & $[8 \times 10^{-4},\; 1.5 \times 10^{-2}]$
+                          & $[1.5 \times 10^{-5},\; 1.0 \times 10^{-4}]$
+                          & variable \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+Strict samples have forces ${\sim}50\times$ above the force threshold:
+the optimizer stops as soon as eigenvalues become positive, which
+typically happens mid-optimization.  Relaxed samples are tightly
+clustered just below $10^{-4}$, having continued optimizing until force
+convergence.
+
 % -------------------------------------------------------------------
 \subsection{The strict--relaxed gap: the central diagnostic}
 % -------------------------------------------------------------------
@@ -326,9 +366,11 @@ The optimizer is equally robust on both PES once ghost modes are excluded.
 \subsection{What are ghost modes?}
 
 A \textbf{ghost mode} is a vibrational eigenvalue that is negative but
-negligible ($|\lambda| < 10^{-3}$).  The PES curvature in that direction
+negligible---typically $|\lambda| \sim 10^{-5}$\,eV/\AA$^2$ (see
+Section~\ref{sec:eval-magnitudes}).  The PES curvature in that direction
 is \emph{effectively zero}; the sign is determined by floating-point
-rounding after Eckart projection.
+rounding after Eckart projection.  The median ghost eigenvalue is
+${\sim}100\times$ smaller than the force convergence threshold.
 
 \begin{tcolorbox}[warning, title=Root cause: LJ has no angular terms]
 \textbf{DFTB0} has angular contributions via its tight-binding Hamiltonian
@@ -355,21 +397,27 @@ As noise increases, more directions become flat ($k$ grows), and strict
 convergence collapses \emph{exponentially}:
 
 \begin{center}
-\begin{tabular}{cccl}
+\begin{tabular}{ccccl}
 \toprule
-Noise & Approx.\ $k$ & $(1/2)^k$ & Observed strict \\
+Noise & Median $n_\text{neg}$ & Mean $n_\text{neg}$ & $(1/2)^{\bar{k}}$ & Observed strict \\
 \midrule
-0.5\,\AA & 0--1 & 50--100\% & 92.3\% \\
-1.0\,\AA & 1--2 & 25--50\% & 64.5\% \\
-1.5\,\AA & 2--3 & 12--25\% & 33.4\% \\
-2.0\,\AA & 3--5 & 3--12\%  & 6.6\%  \\
+0.5\,\AA & 1 & 1.2 & 43\% & 92.3\% \\
+1.0\,\AA & 1 & 1.6 & 33\% & 64.5\% \\
+1.5\,\AA & 2 & 3.6 & 8\%  & 33.4\% \\
+2.0\,\AA & 6 & 7.0 & 0.8\% & 6.6\%  \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The observed rates match the coin-flip model quantitatively.  DFTB0 has
-$k \approx 0$ at all noise levels, so $(1/2)^0 = 1$ and strict $\approx$
-relaxed.
+\noindent
+The $n_\text{neg}$ counts are from relaxed-converged samples only
+(i.e., samples that reached force convergence but have ghost eigenvalues).
+At $n{=}2.0$, the typical sample has 6--7 ghost modes spread across
+$(-2 \times 10^{-3}, 0)$; the probability of \emph{all} landing positive
+by chance is $\sim$1\%.
+
+DFTB0 has $k \approx 0$ at all noise levels, so
+$(1/2)^0 = 1$ and strict $\approx$ relaxed.
 
 \begin{tcolorbox}[finding, title=Finding 3: The collapse is a criterion problem]
 Strict convergence ($n_\text{neg}{=}0$) demands positive curvature in
@@ -378,28 +426,124 @@ optimizer failure---it is an \textbf{inappropriate criterion} for pairwise
 potentials.  The relaxed criterion resolves this completely.
 \end{tcolorbox}
 
-\subsection{Threshold quality: is 0.01 the right value?}
+\subsection{How small are the ghost eigenvalues?}
+\label{sec:eval-magnitudes}
 
-The cascade data (Appendix~\ref{app:cascade}) shows that convergence
-\textbf{plateaus by threshold 0.001--0.002}---the 0.01 bound from the
-$\varepsilon^{1/2}$ theorem is $5\times$ looser than necessary.
+The ``relaxed'' label suggests loose tolerances, but in practice the
+ghost eigenvalues are \textbf{extremely small}.
+
+\paragraph{Eigenvalue magnitude distribution (relaxed-converged samples, full v12b 50k):}
 
 \begin{center}\small
-\begin{tabular}{ccccc}
+\begin{tabular}{l rrrr}
 \toprule
-Noise & Plateau thr & Plateau value & Rate excl.\ errors \\
+$|\lambda_\text{min}|$ band
+  & $n{=}0.5$ & $n{=}1.0$ & $n{=}1.5$ & $n{=}2.0$ \\
 \midrule
-0.5\,\AA & 0.002 & 273/273 & \textbf{100\%} \\
-1.0\,\AA & 0.002 & 279/279 & \textbf{100\%} \\
-1.5\,\AA & 0.001 & 279/282 & 98.9\% \\
-2.0\,\AA & 0.002 & 284/285 & 99.6\% \\
+$< 10^{-6}$       &  --- & 7 (8\%)   & 23 (13\%) & 18 (7\%)  \\
+$10^{-6}$--$10^{-5}$  &  2 (33\%) & 39 (44\%) & 70 (38\%) & 64 (24\%) \\
+$10^{-5}$--$10^{-4}$  &  4 (67\%) & 40 (45\%) & 75 (41\%) & 109 (41\%) \\
+$10^{-4}$--$5{\times}10^{-4}$ & --- & 2 (2\%)   & 13 (7\%)  & 64 (24\%) \\
+$5{\times}10^{-4}$--$10^{-3}$ & --- & ---       & 2 (1\%)   & 7 (3\%)   \\
+$10^{-3}$--$10^{-2}$ & --- & ---       & ---       & 3 (1\%)   \\
+\midrule
+\textbf{Total relaxed} & \textbf{6} & \textbf{88} & \textbf{183} & \textbf{265} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-There is a \textbf{clean gap}: no sample has an eigenvalue between $-0.01$
-and $-0.002$.  Ghost modes cluster in $(-10^{-3}, 0)$; genuine saddle
-eigenvalues would be much more negative.  The relaxed threshold is safe.
+\begin{tcolorbox}[finding, title=Key numbers: ghost eigenvalues]
+\begin{itemize}[nosep,leftmargin=*]
+  \item \textbf{Median $|\lambda_\text{min}|$}: $1.2 \times 10^{-5}$ ($n{=}0.5$),
+    $\;9.4 \times 10^{-6}$ ($n{=}1.0$),
+    $\;9.5 \times 10^{-6}$ ($n{=}1.5$),
+    $\;2.3 \times 10^{-5}$ ($n{=}2.0$)
+  \item \textbf{Worst case}: $|\lambda_\text{min}| = 1.6 \times 10^{-3}$
+    (one sample at $n{=}2.0$; 99\% are below $10^{-3}$)
+  \item \textbf{No sample} has $|\lambda_\text{min}|$ between $2 \times 10^{-3}$
+    and $10^{-2}$---clean spectral gap
+\end{itemize}
+\end{tcolorbox}
+
+\paragraph{Number of ghost modes per sample:}
+At $n{=}2.0$, relaxed samples have median $n_\text{neg}{=}6$ and mean $7.0$
+(range 1--19).  The count grows roughly linearly with noise---consistent
+with displacement pushing more atom pairs out of their LJ wells.
+
+\paragraph{Cascade: convergence vs.\ eigenvalue threshold.}
+
+\begin{center}\small
+\begin{tabular}{c cccccc}
+\toprule
+Noise & Strict & $|\lambda|{<}10^{-4}$ & $|\lambda|{<}5{\times}10^{-4}$
+  & $|\lambda|{<}10^{-3}$ & $|\lambda|{<}2{\times}10^{-3}$ & $|\lambda|{<}10^{-2}$ \\
+\midrule
+0.5 & 265 & 271 & 271 & 272 & 273 & 273 \\
+1.0 & 185 & 272 & 274 & 278 & 279 & 279 \\
+1.5 &  96 & 265 & 279 & 282 & 282 & 282 \\
+2.0 &  19 & 210 & 275 & 282 & 285 & 285 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The cascade \textbf{plateaus by $2 \times 10^{-3}$}---the 0.01 bound
+from the $\varepsilon^{1/2}$ theorem is $5\times$ looser than
+necessary.  A threshold of $\tau = 5 \times 10^{-4}$ would capture
+96\% of relaxed samples even at $n{=}2.0$.  At $\tau = 10^{-3}$:
+99\%.
+
+\begin{remark}
+The spectral gap is \textbf{clean}: ghost eigenvalues live in
+$(-2 \times 10^{-3}, 0)$; genuine saddle eigenvalues would be
+$\mathcal{O}(1)$.  No ghost mode remotely resembles a true instability.
+\end{remark}
+
+\subsection{Hessian conditioning}
+\label{sec:conditioning}
+
+Ghost modes also manifest as poor Hessian conditioning.  The vibrational
+condition number
+$\kappa = |\lambda_\text{max}| \mathbin{/} |\lambda_\text{min}|$
+is driven by the tiny denominator:
+
+\begin{center}\small
+\begin{tabular}{c rrrr}
+\toprule
+& \multicolumn{2}{c}{\textbf{Final $\kappa$}} & \multicolumn{2}{c}{\textbf{Peak $\kappa$ (trajectory)}} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5}
+Noise & Median & Geomean & Median & Max \\
+\midrule
+0.5\,\AA & $1.7 \times 10^{3}$  & $2.4 \times 10^{3}$
+         & $1.3 \times 10^{7}$  & $5.5 \times 10^{12}$ \\
+1.0\,\AA & $4.7 \times 10^{3}$  & $1.0 \times 10^{4}$
+         & $8.5 \times 10^{7}$  & $1.5 \times 10^{12}$ \\
+1.5\,\AA & $3.3 \times 10^{5}$  & $1.9 \times 10^{5}$
+         & $4.3 \times 10^{8}$  & $1.5 \times 10^{12}$ \\
+2.0\,\AA & $2.2 \times 10^{6}$  & $1.2 \times 10^{6}$
+         & $2.5 \times 10^{8}$  & $1.5 \times 10^{13}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+At $n{=}0.5$, most samples converge strictly ($n_\text{neg}{=}0$) with
+median $\kappa \sim 10^3$---well-conditioned.  At $n{=}2.0$, the
+median final $\kappa$ rises to $\sim 10^6$ because the smallest
+eigenvalue is $|\lambda_\text{min}| \sim 10^{-5}$ (a ghost mode).
+Peak trajectory conditioning reaches $10^{12}$--$10^{13}$ at all
+noise levels, reflecting transient ill-conditioning during
+optimization---but the RFO step builder handles this robustly via
+its augmented Hessian formulation.
+
+\begin{tcolorbox}[finding, title=Finding: conditioning confirms ghost modes]
+The $1000\times$ increase in final $\kappa$ from $n{=}0.5$ to $n{=}2.0$
+is entirely explained by ghost eigenvalues entering the denominator.
+The numerator ($|\lambda_\text{max}| \sim 0.5$--$0.7$\,eV/\AA$^2$) is
+constant across noise levels; only the denominator shrinks.  Despite
+$\kappa \sim 10^6$, the optimizer converges reliably---RFO is
+condition-number-agnostic by design.
+\end{tcolorbox}
 
 % =============================================================================
 \section{LJ vs.\ DFTB0: Key Contrasts}
@@ -419,6 +563,10 @@ eigenvalues would be much more negative.  The relaxed threshold is safe.
 \midrule
 Strict range & 92\% $\to$ 7\% & 98\% $\to$ 93\% \\
 Relaxed range & 95\% $\to$ 99\% & $\sim$98\% $\to$ $\sim$93\% \\
+Median $|\lambda_\text{min}|$ ($n{=}2.0$)
+  & $2.3 \times 10^{-5}$ & $< 10^{-8}$ (negligible) \\
+Median $\bar{F}$ at convergence ($n{=}2.0$)
+  & $9.5 \times 10^{-5}$ (relaxed) & $\sim 5 \times 10^{-3}$ (strict) \\
 Dominant failure & Ghost modes (67\%) & Oscillation (8.2\%) \\
 Kick gain at $n{=}2.0$ & $+$0.7\,pts & $+$12.2\,pts \\
 Median steps ($n{=}2.0$) & 817 & $\sim$11\,000 \\
@@ -459,8 +607,10 @@ Hardest samples & \{106, 35, 178\} & \{136, 150, 209\} \\
     modes from missing angular terms---not optimizer failure.
 
   \item \textbf{The $\bm{\varepsilon^{1/2}}$ theorem is validated.}
-    The relaxed criterion $\lambda_\text{min} \geq -\sqrt{\varepsilon}$
-    captures essentially all converged samples.
+    Ghost eigenvalues have median $|\lambda| \sim 10^{-5}$
+    (worst case $1.6 \times 10^{-3}$)---all well within
+    $\sqrt{\varepsilon} = 0.01$.  A threshold of $5 \times 10^{-4}$
+    would suffice for 96\% of samples.
 
   \item \textbf{Ghost modes dominate LJ (67\%); oscillation dominates
     DFTB0 (8.2\%).}  Remaining challenges are PES-specific.
@@ -476,10 +626,23 @@ Hardest samples & \{106, 35, 178\} & \{136, 150, 209\} \\
 \subsection{Implications for the optimizer}
 
 The LJ results argue strongly for \textbf{adopting the relaxed convergence
-criterion as the primary metric} on any PES.  Strict convergence is
-suitable only when the PES is known to have well-defined curvature in all
-vibrational directions, and even then the $\varepsilon^{1/2}$ theorem
-says eigenvalues in $[-\sqrt{\varepsilon}, 0)$ should be accepted.
+criterion as the primary metric} on any PES.  The data supports concrete
+recommendations:
+
+\begin{itemize}[nosep]
+  \item \textbf{Practical threshold}: $\tau = 5 \times 10^{-4}$ captures
+    ${\geq}96\%$ of relaxed samples at every noise level (vs.\ 99\% at
+    $\tau = 10^{-3}$, 100\% at $\tau = 2 \times 10^{-3}$).  The
+    $\varepsilon^{1/2}$ bound of 0.01 is conservative by ${\sim}5\times$.
+  \item \textbf{Force convergence matters more than eigenvalues}: relaxed
+    samples have $\bar{F} \sim 9.5 \times 10^{-5}$\,eV/\AA{} (well-converged);
+    strict samples have $\bar{F} \sim 5.5 \times 10^{-3}$\,eV/\AA{}
+    ($50\times$ larger, because the optimizer stops at $n_\text{neg}{=}0$
+    without a force check).
+  \item \textbf{For pairwise potentials}, strict convergence is not just
+    hard to achieve---it is \emph{the wrong criterion}.  Ghost eigenvalues
+    at $|\lambda| \sim 10^{-5}$\,eV/\AA$^2$ carry no physical significance.
+\end{itemize}
 
 For future work on potentials with flat directions (force fields, classical
 pair potentials, coarse-grained models), the relaxed criterion should be
@@ -666,8 +829,8 @@ Seed per sample: $\texttt{noise\_seed} + \texttt{sample\_index}$
 Parameter & Value & Purpose \\
 \midrule
 Calculator & LJ (UFF, $\sigma/3$) & PES evaluation \\
-Force convergence $\varepsilon$ & $10^{-4}$\,eV/\AA & first-order criterion \\
-Relaxed threshold $\tau$ & 0.01 & second-order criterion \\
+Force convergence $\varepsilon$ & $10^{-4}$\,eV/\AA & mean per-atom $\bar{F}$ \\
+Relaxed eval.\ threshold $\tau$ & 0.01 & $= \sqrt{\varepsilon}$ (relaxed only) \\
 Max atom displacement (MAD) & 1.3\,\AA & initial trust radius \\
 Trust radius floor $R_\text{floor}$ & 0.01\,\AA & prevents TR collapse \\
 Min interatomic distance & 0.5\,\AA & rejects unphysical steps \\

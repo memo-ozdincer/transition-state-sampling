@@ -4,9 +4,7 @@
       "Bash(squeue -u memoozd)",
       "Bash(sbatch /project/rrg-aspuru/memoozd/ts-tools/src/noisy/v2_tests/scripts/slurm_templates/reserve_node_6h.slurm)",
       "Bash(squeue -u memoozd -j 1221710 --format=\"%.18i %.9P %.20j %.8u %.2t %.10M %.6D %R\")",
-      "Bash(ssh tri0107:*)",
-      "Read(//scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0321/**)",
-      "Bash(python3 -c \":*)"
+      "Bash(ssh tri0107:*)"
     ]
   }
 }
