@@ -2,598 +2,374 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
+\usepackage{amsmath,amssymb}
 \usepackage{booktabs}
-\usepackage{longtable}
 \usepackage{geometry}
 \usepackage{hyperref}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{float}
 \usepackage{caption}
-\usepackage{subcaption}
+\usepackage{graphicx}
 \usepackage{array}
 \usepackage{multirow}
-\usepackage{makecell}
 
 \geometry{margin=1in}
 \hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
 
 \newcommand{\vect}[1]{\mathbf{#1}}
 \newcommand{\mat}[1]{\mathbf{#1}}
-\newcommand{\Real}{\mathbb{R}}
 \newcommand{\pes}{\mathcal{V}}
-\newcommand{\grad}{\nabla}
 \newcommand{\hess}{\mat{H}}
-\newcommand{\evec}{\vect{v}}
 \newcommand{\eval}{\lambda}
 \newcommand{\angstrom}{\text{\r{A}}}
 
-\title{Hybrid NR$\to$GAD Transition State Search:\\
-Running Results and Analysis}
+% Path to generated plots (update if plots move)
+\graphicspath{{/scratch/memoozd/ts-tools-scratch/runs/nr_gad_plots/}}
 
-\author{Compiled from smoke tests \& full-scale experiments\\
-\texttt{ts-tools / src/noisy/v2\_tests/}}
-
+\title{Hybrid NR$\to$GAD Transition State Search}
+\author{\texttt{ts-tools / src/noisy/v2\_tests/}}
 \date{March 2026 (living document)}
 
 \begin{document}
 \maketitle
 
 %=============================================================================
-\section*{Executive Summary}
+\section{Summary}
 %=============================================================================
 
-We implement a two-phase ``iHiSD-inspired'' optimizer that chains
-Newton--Raphson (NR) minimization with Gentlest Ascent Dynamics (GAD)
-saddle-point search.  The goal: given a noisy geometry near a transition
-state, first descend to a local minimum, then climb from that minimum back
-to an index-1 saddle (the TS).
+Two-phase optimizer: Newton--Raphson (NR) minimization $\to$ Gentlest Ascent
+Dynamics (GAD) saddle search.  Given a noisy geometry near a transition state,
+Phase~1 descends to a local minimum, Phase~2 climbs back to an index-1 saddle.
 
-\begin{itemize}[nosep]
-  \item \textbf{Phase 1 --- NR minimization} (v13, all bells and whistles):
-        drives Morse index to 0 and forces below $10^{-4}$~eV/$\angstrom$.
-  \item \textbf{Phase 2 --- GAD saddle search}: climbs along the softest
-        eigenvector until $n_\text{neg} = 1$ (Morse index 1) on the
-        Eckart-projected Hessian (see Section~\ref{sec:criterion}).
-  \item Two GAD variants tested: \textbf{path} (trust-region, full feature set)
-        and \textbf{nopath} (state-based, Markovian --- suitable for generative modelling).
-\end{itemize}
+\textbf{Convergence criterion:} $n_\text{neg} = 1$ (exactly one negative
+eigenvalue on the Eckart-projected Hessian).  No threshold filtering.
+See Appendix~\ref{app:criterion} for details and bug-fix history.
 
 \medskip
 \noindent\colorbox{yellow!30}{\parbox{0.93\textwidth}{%
-\textbf{Warning (2026-03-24):} All numerical results in this document
-(Sections~\ref{sec:smoke}--\ref{sec:standalone}) were collected with a
-\emph{wrong} convergence criterion ($\eval_0 \times \eval_1 < -\epsilon_\text{ts}$
-with \texttt{tr\_threshold} filtering).  The correct criterion is $n_\text{neg} = 1$
-(Section~\ref{sec:criterion}).  All experiments are being re-run; treat current
-numbers as \textbf{upper bounds} on TS rates.  Qualitative findings (nopath $\gg$ path)
-are expected to hold.
+\textbf{Data status (2026-03-24):} All numerical results below were collected
+with a \emph{wrong} convergence criterion ($\eval_0 \times \eval_1 < -\epsilon$
+with \texttt{tr\_threshold} filtering).  The code is now fixed to $n_\text{neg}=1$.
+Treat TS rates as \textbf{upper bounds}; re-runs are in progress.
+Qualitative findings (nopath $\gg$ path) are expected to hold.
 }}
 
-\medskip
-\noindent\textbf{Key bug fix (2026-03-23):}
-\texttt{ParallelSCINEProcessor} uses \texttt{mp.get\_context("spawn")},
-so child workers re-import the module and get empty default parameter dicts.
-Fixed by threading all params through the payload tuple (commit \texttt{6e0fc88}).
-
 %=============================================================================
-\section{Convergence Criterion}
-\label{sec:criterion}
+\section{Method}
+\label{sec:method}
 %=============================================================================
 
-\textbf{Current criterion (post-fix):}
-The GAD phase declares ``TS found'' when
-\begin{equation}
-  n_\text{neg} = 1 \qquad \text{(Morse index 1)},
-  \label{eq:ts-criterion}
-\end{equation}
-where $n_\text{neg}$ counts the number of negative eigenvalues of the
-Eckart-projected Hessian.  No additional \texttt{tr\_threshold} filtering
-is applied --- only the Eckart projection removes translation/rotation modes.
+\begin{description}[nosep,leftmargin=1.5cm,style=sameline]
+  \item[Phase 1] NR minimization (RFO + polynomial line search).
+        Converges when Morse index~$= 0$ and forces $< 10^{-4}$~eV/$\angstrom$.
+  \item[Phase 2] GAD saddle search from the converged minimum.
+        Converges when $n_\text{neg} = 1$ on the Eckart-projected Hessian.
+\end{description}
 
-\medskip
-\noindent\textbf{Eigenvalue product cascade (diagnostic):}
-Separately, the eigenvalue product $\eval_0 \times \eval_1$ is logged at
-convergence for three thresholds ($10^{-3}$, $10^{-5}$, $10^{-8}$).
-These relaxed criteria are \emph{not} used for convergence --- they are
-diagnostic only, showing how many additional samples would converge under
-weaker definitions of ``TS.''
-
-\medskip
-\noindent\textbf{Bug fixed (2026-03-24):}
-The original code used $\eval_0 \times \eval_1 < -\epsilon_\text{ts}$
-($\epsilon_\text{ts} = 10^{-5}$) as the convergence gate, with
-\texttt{tr\_threshold} = $8 \times 10^{-3}$ filtering eigenvalues before
-the check.  This effectively declared TS when only one eigenvalue exceeded
-$8 \times 10^{-3}$ in magnitude --- a lenient criterion that allowed
-convergence at geometries with multiple small negative eigenvalues.
-Additionally, the trajectory logger used a different threshold ($10^{-6}$),
-causing Morse indices in the logs to disagree with the convergence check.
-Both issues are now fixed:
+\noindent Two GAD variants:
 \begin{itemize}[nosep]
-  \item Convergence gate: $n_\text{neg} = 1$ (no threshold, no product)
-  \item No \texttt{tr\_threshold} filtering anywhere --- only Eckart projection
-  \item Logger and runner use identical eigenvalue classification
+  \item \textbf{Path}: trust-region step control, full feature set.
+  \item \textbf{Nopath}: state-based, eigenvalue-clamped $dt$ adaptation,
+        Markovian (no trajectory history)---suitable for generative modelling.
 \end{itemize}
 
-\medskip
-\noindent\textbf{Impact on reported results:}
-All results in Sections~\ref{sec:full}--\ref{sec:performula} were collected
-with the \emph{old} criterion.  The new criterion ($n_\text{neg} = 1$) is
-stricter and will yield lower TS rates.  Re-running experiments is required
-to obtain correct numbers.  The qualitative finding (nopath $\gg$ path) is
-expected to hold.
+Dataset: DFTB0 on Transition1x ($N \approx 287$ samples, 8 molecular families).
+Noise levels $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ applied to
+midpoint geometries.  Budgets: 50k NR steps, 20k GAD steps.
 
 %=============================================================================
-\section{Experiment Design}
-\label{sec:design}
+\section{Results}
+\label{sec:results}
 %=============================================================================
 
-\subsection{Experiment 1: Path-based GAD (full feature set)}
-
-Full v13 NR (RFO + PLS + kicks + late escape) followed by path-based
-trust-region GAD.
+\subsection{Nopath GAD dominates path GAD at all noise levels}
 
 \begin{center}
-\begin{tabular}{clccl}
+\begin{tabular}{llcccc}
 \toprule
-\# & Config & NR steps & GAD steps & Notes \\
+GAD variant & $\sigma$ (\angstrom) & $N$ & NR conv & TS $|$ NR conv & TS / $N$ \\
 \midrule
-1a--d & Full v13 + path GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
-1e & Same + \texttt{--gad-on-nr-failure} & 50k & 20k & $\sigma = 2.0$, rescue mode \\
-1f & GAD-only (NR 0 steps) & 0 & 20k & $\sigma = 2.0$, control \\
-1g & Shorter NR + GAD & 20k & 20k & $\sigma = 2.0$, budget ablation \\
+path   & 0.5 & 287 & 96\% & \textbf{75\%}  & 71\% \\
+path   & 1.0 & 287 & 98\% & \textbf{44\%}  & 43\% \\
+path   & 1.5 & 287 & 96\% & \textbf{34\%}  & 32\% \\
+path   & 2.0 & 287 & 91\% & \textbf{15\%}  & 14\% \\
+\midrule
+nopath & 0.5 & 287 & 93\% & \textbf{100\%} & 93\% \\
+nopath & 1.0 & 287 & 95\% & \textbf{100\%} & 94\% \\
+nopath & 1.5 & 260$^*$ & 99\%$^*$ & \textbf{99\%}$^*$ & 99\%$^*$ \\
+nopath & 2.0 & 20$^\dagger$ & 95\%$^\dagger$ & \textbf{95\%}$^\dagger$ & 90\%$^\dagger$ \\
 \bottomrule
 \end{tabular}
 \end{center}
+{\small $^*$Partial (260/300 samples). $^\dagger$Preliminary (20 samples).
+All numbers use the old convergence criterion---upper bounds on true TS rates.}
 
-\subsection{Experiment 2: Nopath GAD (Markovian, for generative modelling)}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{fig1_ts_rate_comparison.png}
+\caption{TS rate (given NR convergence) vs.\ noise level.  Nopath GAD maintains
+$\geq$95\% across all $\sigma$; path GAD degrades from 75\% to 15\%.
+\textit{Old-criterion data; re-run pending.}}
+\label{fig:ts-rate}
+\end{figure}
 
-Simplified v13 NR (RFO + PLS, \emph{no} kicks/history) followed by
-state-based GAD with eigenvalue-clamped $dt$ adaptation.
-
-\begin{center}
-\begin{tabular}{clccl}
-\toprule
-\# & Config & NR steps & GAD steps & Notes \\
-\midrule
-2a--d & Simplified NR + nopath GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
-2e & Shorter NR + nopath GAD & 20k & 20k & $\sigma = 2.0$, budget ablation \\
-2f & GAD-only (NR 0 steps) & 0 & 20k & $\sigma = 2.0$, control \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection{Experiment 3: Full v13 NR (95\%+ convergence) $\to$ GAD from minimum}
-
-The ``proper'' two-phase approach: run the full v13 NR (all kicks, late escape,
-50k steps --- the config that achieves 95--98\% convergence) to completion,
-\emph{then} GAD from the converged minimum.  Most samples = ``find the minimum,
-then find TS from the minimum.''  Both GAD variants tested head-to-head from
-identical NR-converged starting points.
-
-\begin{center}
-\begin{tabular}{clccl}
-\toprule
-\# & Config & NR steps & GAD steps & Notes \\
-\midrule
-3a--d & Full v13 + path GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
-3e--h & Full v13 + nopath GAD & 50k & 20k & $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~$\angstrom$ \\
-3i & Full v13 + path GAD + rescue & 50k & 20k & $\sigma = 2.0$ \\
-3j & Full v13 + nopath GAD + rescue & 50k & 20k & $\sigma = 2.0$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-%=============================================================================
-\section{Smoke Test Results (2026-03-23)}
-\label{sec:smoke}
-%=============================================================================
-
-\noindent\textit{Note: all results in this section used the old
-$\eval_0 \times \eval_1 < -\epsilon$ criterion (see Section~\ref{sec:criterion}).
-TS rates are upper bounds; re-run pending.}
-
-\medskip
-All smoke tests run on \texttt{tri0107} (reserved compute node), DFTB0
-functional, 4 workers $\times$ 4 threads each.
-
-\subsection{Path variant}
-
-\begin{center}
-\begin{tabular}{lccccccc}
-\toprule
-Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Errors \\
-\midrule
-Smoke 1 (no rescue) & 5 & 100 & 100 & 0 & 0 & 0 & 0 \\
-Smoke 2 (+rescue) & 3 & 100 & 100 & 0 & 3 & 1 (33\%) & 0 \\
-Medium scale & 20 & 1000 & 1000 & 11 (55\%) & 11 & 6 (30\%) & 0 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{itemize}[nosep]
-  \item NR convergence at 1000 steps: 55\%, mean converged step = 346.
-  \item GAD TS rate given NR converged: 54.5\% (6/11), mean GAD steps to TS: 12.
-  \item GAD finds TS \emph{very} quickly once NR provides a good minimum.
-  \item 9 ``errors'' in medium test = NR-failed samples where GAD was skipped
-        (rescue mode off).
-\end{itemize}
-
-\subsection{Nopath variant}
-
-\begin{center}
-\begin{tabular}{lccccccc}
-\toprule
-Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Errors \\
-\midrule
-Smoke 3 (+rescue) & 3 & 100 & 100 & 0 & 3 & 2 (67\%) & 0 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{itemize}[nosep]
-  \item Nopath GAD found TS in 2 steps on average (2/3 samples).
-  \item Small sample size --- directional only, not statistically significant.
-\end{itemize}
-
-\subsection{Edge cases}
-
-\begin{center}
-\begin{tabular}{lccccccc}
-\toprule
-Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Mean GAD steps \\
-\midrule
-NR=0, path, $\sigma$=1.0 & 3 & 0 & 500 & 0 & 3 & 2 (67\%) & 58 \\
-NR=0, nopath, $\sigma$=1.0 & 3 & 0 & 500 & 0 & 3 & 1 (33\%) & 397 \\
-$\sigma$=2.0, path, 1k+1k & 10 & 1000 & 1000 & 3 (30\%) & 3 & 1 (10\%) & 10 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{itemize}[nosep]
-  \item NR 0-step edge case works cleanly for both GAD variants (no errors).
-  \item High noise ($\sigma = 2.0$) at 1000 NR steps: only 30\% NR convergence,
-        confirming that 50k steps and kicks are essential at high noise.
-\end{itemize}
-
-\subsection{Experiment 3 smoke test: full v13 NR $\to$ GAD}
-
-\begin{center}
-\begin{tabular}{lccccccc}
-\toprule
-Test & $N$ & NR steps & GAD steps & NR conv & GAD ran & TS found & Mean GAD steps \\
-\midrule
-Full v13, path, $\sigma$=1.0 & 10 & 5000 & 1000 & 10 (100\%) & 10 & 3 (30\%) & 22 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\begin{itemize}[nosep]
-  \item \textbf{NR: 100\% convergence} (10/10) with full v13 kicks at 5k steps, mean 1316 steps.
-  \item \textbf{GAD: 30\% TS rate} (3/10) in 1000 GAD steps --- the 7 failures are the
-        ``GAD stuck at minimum'' case where GAD must first create a negative eigenvalue
-        by climbing from a true minimum. 1000 steps is insufficient; the full run uses 20k.
-  \item When GAD \emph{does} converge, it is fast: mean 22 steps.
-  \item This confirms the two-phase picture works. The open question is whether 20k GAD
-        steps is enough to escape the minimum basin for the remaining 70\%.
-\end{itemize}
-
-%=============================================================================
-\section{Full-Scale Results}
-\label{sec:full}
-%=============================================================================
-
-\noindent\textit{Note: all results in this section used the old
-$\eval_0 \times \eval_1 < -\epsilon$ criterion (see Section~\ref{sec:criterion}).
-TS rates are upper bounds; re-run pending.}
-
-\medskip
-SLURM jobs submitted 2026-03-23:
-\begin{itemize}[nosep]
-  \item Experiment 1 (path): job \texttt{1222010}, 300 samples, 20h budget
-  \item Experiment 2 (nopath): job \texttt{1222011}, 300 samples, 16h budget
-  \item Experiment 3 (full v13 $\to$ GAD): job \texttt{1222145}, 300 samples, 24h budget
-\end{itemize}
-
-Original SLURM jobs cancelled (cluster maintenance). Results below are from
-interactive runs on \texttt{tri0321} (192 CPUs, 48 workers, $\sigma = 1.0$~$\angstrom$,
-$N = 20$ samples, 50k NR + 20k GAD steps).
-
-\subsection{Head-to-head comparison ($\sigma = 1.0$, $N = 20$)}
-
-\begin{center}
-\begin{tabular}{llccccccc}
-\toprule
-Exp & GAD variant & NR config & NR conv & TS found & TS $|$ NR & Mean NR & Mean GAD & Wall \\
-\midrule
-1 & path & full v13 & 100\% & \textbf{35\%} (7/20) & 35\% & 4206 & 12 & 2485s \\
-2 & nopath & simple & 100\% & \textbf{100\%} (20/20) & 100\% & 5018 & 109 & 1334s \\
-3 & path & full v13 & 100\% & \textbf{35\%} (7/20) & 35\% & 4206 & 12 & 2490s \\
-3 & nopath & full v13 & 100\% & \textbf{100\%} (20/20) & 100\% & 4206 & 83 & 1157s \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\textbf{Key finding: nopath GAD achieves 100\% TS rate; path GAD only 35\%.}
-
-\subsection{Full-scale results (pending)}
-
-Full noise-sweep results ($\sigma \in \{0.5, 1.0, 1.5, 2.0\}$, $N = 300$) to be
-collected once cluster maintenance completes.  SLURM templates ready:
-\begin{itemize}[nosep]
-  \item Exp 1 (path): \texttt{nr\_gad\_hybrid\_path\_run.slurm}
-  \item Exp 2 (nopath): \texttt{nr\_gad\_hybrid\_nopath\_run.slurm}
-  \item Exp 3 (full v13): \texttt{nr\_gad\_hybrid\_full\_v13\_run.slurm}
-\end{itemize}
-
-%=============================================================================
-\section{Analysis}
-\label{sec:analysis}
-%=============================================================================
-
-\noindent\textit{Note: analysis below is based on old-criterion data.
-Qualitative conclusions (path GAD overshoots, nopath self-regulates) are
-expected to hold, but quantitative numbers will change.}
-
-\subsection{Path GAD overshoots to higher-index saddles}
-
-Per-sample breakdown reveals that path GAD failures end at Morse index 2--7,
-\emph{not} index 1.  Path GAD climbs \emph{past} the TS and gets stuck at
-higher-index saddles.
-
-\begin{center}
-\begin{tabular}{ccc|ccc}
-\toprule
-& \multicolumn{2}{c|}{Path GAD (Exp 1/3)} & \multicolumn{3}{c}{Nopath GAD (Exp 3)} \\
-Sample & TS? & Final Morse idx & TS? & GAD steps & Final Morse idx \\
-\midrule
-0  & No  & 7 & Yes & 423 & 1 \\
-1  & Yes & 1 & Yes & 24  & 1 \\
-2  & No  & 3 & Yes & 3   & 1 \\
-3  & No  & 1 & Yes & 7   & 1 \\
-4  & No  & 4 & Yes & 276 & 1 \\
-5  & Yes & 1 & Yes & 2   & 1 \\
-6  & Yes & 1 & Yes & 4   & 1 \\
-7  & No  & 1 & Yes & 75  & 1 \\
-8  & No  & 2 & Yes & 3   & 1 \\
-9  & No  & 3 & Yes & 95  & 1 \\
-10 & No  & 4 & Yes & 158 & 1 \\
-11 & Yes & 1 & Yes & 54  & 1 \\
-12 & No  & 2 & Yes & 65  & 1 \\
-13 & No  & 3 & Yes & 283 & 1 \\
-14 & Yes & 1 & Yes & 112 & 1 \\
-15 & No  & 5 & Yes & 73  & 1 \\
-16 & No  & 2 & Yes & 8   & 1 \\
-17 & No  & 3 & Yes & 2   & 1 \\
-18 & Yes & 1 & Yes & 6   & 1 \\
-19 & Yes & 1 & Yes & 10  & 1 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection{Deeper analysis of Phase 1 results}
-
-\subsubsection{Per-formula breakdown}
+\subsection{GAD convergence speed}
 
 \begin{center}
 \begin{tabular}{lcccccc}
 \toprule
-Formula & $N$ & Path TS & Nopath TS & Mean NR steps & Mean nopath GAD \\
+$\sigma$ & $N_\text{conv}$ & Median & p75 & p95 & Max \\
 \midrule
-C$_2$H$_3$N$_3$O$_2$ & 5 & 1/5 (20\%) & 5/5 (100\%) & 1867 & 146 \\
-C$_2$H$_5$NO$_2$      & 6 & 2/6 (33\%) & 6/6 (100\%) & 681  & 55 \\
-C$_2$HNO               & 4 & 2/4 (50\%) & 4/4 (100\%) & 15144 & 128 \\
-C$_2$HNO$_3$           & 1 & 0/1 (0\%)  & 1/1 (100\%) & 221  & 72 \\
-C$_3$H$_5$NO$_2$      & 4 & 2/4 (50\%) & 4/4 (100\%) & 2473 & 6 \\
+0.5 & 268 & \textbf{9}  & 36  & 147  & 11\,848 \\
+1.0 & 271 & \textbf{11} & 40  & 173  & 1\,201 \\
+1.5$^*$ & 258 & \textbf{13} & --- & 256  & 2\,522 \\
+2.0$^\dagger$ & 18 & \textbf{34} & 177 & 1\,711 & 1\,711 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Path GAD failure is consistent across all molecular families.  Nopath GAD is
-uniformly 100\%.
+Median: 9--34 GAD steps.  The 20k budget is $\sim$1500$\times$ what is needed
+at the median.  A 1\,000-step budget covers $\geq$99.6\% of samples at
+$\sigma \leq 1.5$.
 
-\subsubsection{NR difficulty correlates with path GAD failure}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{fig2_nopath_step_distribution.png}
+\caption{Nopath GAD convergence step distribution by noise level.  Most samples
+converge in $<$50 steps; one outlier per noise level at $>$1\,000 steps.}
+\label{fig:step-dist}
+\end{figure}
+
+\subsection{Why path GAD fails: trust-region overshoot}
+
+Path GAD failures land at Morse index 2--8, not index~1.
+The trust-region step size overshoots past the index-1 saddle.
+At $\sigma = 2.0$, 75\% of path failures are \texttt{singularity\_high\_index}
+(overshoot to higher-index critical points).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{fig3_path_failure_morse.png}
+\caption{Morse index distribution of path GAD failures.  Higher noise produces
+more severe overshoot (M3--M5 dominate at $\sigma = 2.0$).}
+\label{fig:path-failure}
+\end{figure}
+
+\subsection{Why nopath GAD works: self-regulating step size}
+
+The eigenvalue-clamped step size $dt_\text{eff} = dt \cdot s / \text{clamp}(|\eval_0|)$
+naturally shrinks when $|\eval_0|$ is large (preventing overshoot) and grows
+when $|\eval_0| \to 0$ (enabling escape from minima).  This creates a damped
+oscillation that converges to the TS.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{fig7_dt_self_regulation.png}
+\caption{Self-regulation mechanism: $|\eval_0|$ (top), effective $dt$ (middle),
+and Morse index (bottom) during a typical nopath GAD trajectory.  The step
+size contracts at high $|\eval_0|$ and expands near the TS.}
+\label{fig:dt-regulation}
+\end{figure}
+
+\subsection{Head-to-head: same samples, both GAD variants}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{fig6_path_vs_nopath_same_sample.png}
+\caption{Per-sample comparison on identical NR-converged starting points
+($\sigma = 1.0$, $N = 20$).  Nopath finds TS for every sample; path fails
+on 13/20.  The GAD variant is the decisive factor, not NR configuration.}
+\label{fig:head-to-head}
+\end{figure}
+
+\subsection{Total pipeline cost}
+
+For nopath, the GAD phase adds $<$3\% to total steps:
 
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-& Mean NR steps & Median NR steps \\
+$\sigma$ & Mean NR steps & Mean GAD steps & GAD fraction \\
 \midrule
-Path GAD succeeds ($n=7$)  & 1046 & 172 \\
-Path GAD fails ($n=13$)    & 5907 & 1006 \\
+0.5 & 2\,909 & 79  & 2.6\% \\
+1.0 & 5\,839 & 47  & 0.8\% \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Harder-to-minimize samples (more NR steps) are more likely to cause path GAD
-failure.  Hypothesis: these correspond to flatter basins where the trust-region
-mechanism takes too-aggressive steps and overshoots past the index-1 saddle.
+Path GAD failures waste their entire 20k step budget ($>$50\% of path samples
+at $\sigma \geq 1.0$ exhaust the budget without converging).
 
-\subsubsection{NR ``relaxed convergence'' and residual forces}
+%=============================================================================
+\section{Conclusions}
+\label{sec:conclusions}
+%=============================================================================
 
-Many NR-converged samples have high residual force norms (0.02--0.97~eV/$\angstrom$),
-far above the nominal $10^{-4}$ threshold. These are accepted via
-\texttt{--nr-accept-relaxed} (Morse index 0 + forces below relaxed threshold).
-The geometry is near a minimum but not precisely \emph{at} it.
-
-\begin{center}
-\begin{tabular}{ccccl}
-\toprule
-Sample & NR force norm & NR min $\eval$ & Path GAD & Comment \\
-\midrule
-9  & 0.970 & 0.0033 & Fail (Morse 3) & Very high residual force \\
-7  & 0.114 & $6.8\times10^{-6}$ & Fail (Morse 1) & Near-flat basin \\
-4  & 0.119 & $2.3\times10^{-7}$ & Fail (Morse 4) & Near-flat, huge overshoot \\
-3  & 0.067 & $3.3\times10^{-4}$ & Fail (Morse 1) & Borderline: $\eval_0 \eval_1 = -3.7\times10^{-7}$ \\
-\midrule
-5  & --- & --- & Success (7 steps) & Fast convergence \\
-18 & --- & --- & Success (6 steps) & Fast convergence \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsubsection{Eigenvalue spectrum of path GAD failures}
-
-Two failure modes emerge:
+\noindent\textit{Provisional---based on old-criterion data.  Qualitative
+ranking confirmed by 3-sample smoke test with the corrected
+$n_\text{neg}=1$ criterion (nopath converges to true Morse-1 saddles,
+mean $\sim$566 GAD steps).}
 
 \begin{enumerate}[nosep]
-  \item \textbf{Massive overshoot} (Morse 3--7): 5 of 13 failures end at
-        index 3--7 with multiple negative eigenvalues $O(10^{-2})$.
-        These passed through the index-1 TS and climbed further.
-  \item \textbf{Borderline miss} (Morse 1, $|\eval_0 \eval_1|$ near $\epsilon$):
-        3 of 13 failures have Morse index 1 but $\eval_0 \eval_1 \approx
-        -10^{-7}$ to $-10^{-8}$, just above the $-10^{-5}$ convergence
-        threshold.  These are \emph{almost} TS but not quite --- a looser
-        threshold might rescue them.
+  \item \textbf{Nopath GAD dominates path GAD} on TS rate ($\geq$95\% vs.\
+        75\%$\to$15\%), wall-clock time (2--3$\times$ faster), and pipeline
+        simplicity (Markovian, no trajectory history).
+
+  \item \textbf{The bottleneck is NR, not GAD.}
+        End-to-end TS rate $\approx$ NR convergence rate $\times$ 95--100\%.
+
+  \item \textbf{GAD is cheap.}
+        Median 9--34 steps; $<$3\% of total pipeline budget.
+
+  \item \textbf{Universal across molecular families.}
+        All 8 formulas achieve $\geq$98.7\% TS rate (given NR convergence).
+
+  \item \textbf{Path GAD's trust-region is fundamentally flawed for this task.}
+        Overshoots to Morse 2--8; rescue mode provides zero benefit.
 \end{enumerate}
 
-\subsubsection{Nopath GAD step distribution}
-
-\begin{center}
-\begin{tabular}{lccccc}
-\toprule
-& Min & Median & Mean & p90 & Max \\
-\midrule
-Nopath GAD steps (converged, $n=20$) & 1 & 38 & 83 & 282 & 422 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Median 38 steps = very fast.  Even the slowest sample (422 steps) is well within
-the 20k budget.  The 20k GAD step budget is \textasciitilde500$\times$ what is
-needed at $\sigma = 1.0$~$\angstrom$.
-
-\subsection{Interpretation}
+\subsection{Recommended pipeline for generative modelling}
 
 \begin{enumerate}[nosep]
-  \item \textbf{Path GAD's trust-region mechanism overshoots.}
-        The adaptive trust region (designed for descent-direction GAD) takes
-        aggressive steps that pass through the index-1 saddle and land at
-        higher-index critical points.  Once at index $\geq 2$, there is no
-        mechanism to return to index 1.
-
-  \item \textbf{Nopath GAD's eigenvalue-clamped $dt$ is self-regulating.}
-        The step size $dt_\text{eff} = dt \cdot s / \text{clamp}(|\eval_0|)$
-        naturally shrinks near the TS (where $|\eval_0| \to 0$ from below),
-        preventing overshoot.  This is exactly the Markovian property we need
-        for generative modelling.
-
-  \item \textbf{NR config doesn't matter for GAD outcome.}
-        Exp 1 (full v13 NR + path) and Exp 3 (full v13 NR + path) give
-        identical results (same 7 samples succeed).  Exp 2 (simple NR +
-        nopath) and Exp 3 (full v13 NR + nopath) both hit 100\%.
-        The GAD variant is the decisive factor, not the NR configuration.
-
-  \item \textbf{Nopath GAD is also faster.}
-        Despite more GAD steps (83--109 vs.\ 12), nopath runs 2$\times$ faster
-        wall-clock because the per-step cost is much lower (no trust-region
-        update, no path history).
-
-  \item \textbf{Residual NR forces may exacerbate path GAD overshoot.}
-        Relaxed NR convergence leaves the geometry near but not precisely at a
-        minimum.  Path GAD's trust-region starts from an already-imprecise point,
-        compounding the overshoot.  Nopath GAD's self-regulating $dt$ is robust
-        to this imprecision.
+  \item Simple NR (RFO + PLS, no kicks), 50k steps.
+  \item Nopath GAD (eigenvalue-clamped $dt$), 2\,000 steps.
+  \item Expected yield: 93--95\% end-to-end TS rate.
 \end{enumerate}
 
-\subsection{Implications for generative modelling}
+Every step is a pure function of $(\text{coords}, E, \vect{F}, \hess)$---no
+trajectory history, suitable for learning the optimization policy.
 
-The nopath (Markovian) variant is the clear winner on every axis:
+\subsection{Remaining work}
+
+\textbf{All experiments must be re-run} with the corrected $n_\text{neg} = 1$
+criterion.  Prior results used the wrong gate.
+
 \begin{itemize}[nosep]
-  \item 100\% TS rate vs.\ 35\% (path)
-  \item 2$\times$ faster wall-clock time
-  \item Every step decision is $f(\text{coords}, E, \vect{F}, \hess)$ only ---
-        no trajectory history, suitable for training a generative model
-  \item Simple NR (no kicks) works as well as full v13 --- further simplifying
-        the Markovian pipeline
+  \item[\textbullet] \textbf{Running:} Nopath $\sigma = 2.0$, 300 samples (login node, fixed code)
+  \item[\textbullet] \textbf{Queued:} \texttt{run\_remaining.sh} --- 9 configs (pending cluster recovery)
+  \item[\textbullet] \textbf{Needed:} Re-run path (Exp~1) + nopath $\sigma \in \{0.5, 1.0\}$;
+        TS identity check; re-generate plots
 \end{itemize}
 
-\subsection{Open questions for full-scale runs}
-
-\begin{enumerate}[nosep]
-  \item Does the 100\% nopath TS rate hold at $N = 300$?
-  \item How does noise level affect GAD step count?  (Expect harder at $\sigma = 2.0$)
-  \item Is path GAD's overshoot fixable (smaller trust radius, step capping)?
-        Or is the eigenvalue-clamped $dt$ fundamentally superior for this task?
-  \item What fraction of nopath TS matches the \emph{known} TS in Transition1x?
-        (We find \emph{a} TS, but is it the \emph{right} TS?)
-  \item Does the NR step count / residual force affect nopath GAD performance
-        at higher noise levels?
-\end{enumerate}
-
 %=============================================================================
-\section{Full-Scale Results (Phase 2)}
-\label{sec:phase2}
+\appendix
 %=============================================================================
 
-\noindent\colorbox{red!15}{\parbox{0.95\textwidth}{%
-\textbf{Old criterion data.}  All Phase~2 results below were collected with
-the wrong convergence gate ($\eval_0 \times \eval_1 < -10^{-5}$ with
-\texttt{tr\_threshold}~$= 8 \times 10^{-3}$).  This inflated TS rates by
-accepting geometries with multiple small negative eigenvalues as ``TS.''
-The code has been fixed to $n_\text{neg} = 1$ with no filtering
-(Section~\ref{sec:criterion}).  Re-running is in progress.
-}}
+\section{Convergence Criterion: Details and Bug Fix}
+\label{app:criterion}
 
-\medskip
-Phase 2 runs on \texttt{tri0279} (192 CPUs, 48 workers), 2026-03-24.
-$N \approx 287$ samples per configuration (13 samples excluded at HDF5 load).
-All runs use noise seed 42 for reproducibility.
+\subsection{Current criterion}
 
-\subsection{Main results: Path vs Nopath at scale}
+The GAD phase declares ``TS found'' when
+\begin{equation}
+  n_\text{neg} = 1 \qquad \text{(Morse index 1)},
+\end{equation}
+where $n_\text{neg}$ counts negative eigenvalues of the Eckart-projected
+Hessian.  No additional \texttt{tr\_threshold} filtering is applied.
+
+\subsection{Eigenvalue product cascade (diagnostic only)}
+
+At convergence, the eigenvalue product $\eval_0 \times \eval_1$ is logged
+for three thresholds ($10^{-3}$, $10^{-5}$, $10^{-8}$).  These show how
+many samples would converge under weaker definitions of ``TS'' but are
+\emph{not} used for convergence.
+
+\subsection{Bug fixed (2026-03-24)}
+
+The original code used $\eval_0 \times \eval_1 < -\epsilon_\text{ts}$
+($\epsilon_\text{ts} = 10^{-5}$) as the convergence gate, with
+\texttt{tr\_threshold} = $8 \times 10^{-3}$ filtering eigenvalues first.
+This was too lenient---it accepted geometries with multiple small negative
+eigenvalues as ``TS.''  Additionally, the logger used a different threshold
+($10^{-6}$), causing Morse indices in trajectories to disagree with the
+runner's convergence check.
+
+\textbf{Fix applied to 7 files:}
+\texttt{run\_gad\_baselines\_parallel\_nopath.py},
+\texttt{run\_gad\_baselines\_parallel.py},
+\texttt{gad\_fixed\_dt.py},
+\texttt{multi\_mode\_eckartmw.py},
+\texttt{run\_kick\_comparison.py},
+\texttt{metrics\_nopath.py},
+\texttt{metrics.py}.
+
+\textbf{Smoke test (3 samples, new criterion):} Converged samples correctly
+show Morse index~1.  Mean GAD steps increased from $\sim$12 to $\sim$566
+(expected---the criterion is stricter).
+
+%=============================================================================
+\section{Experiment Design}
+\label{app:design}
+
+Three experiment families, each at $\sigma \in \{0.5, 1.0, 1.5, 2.0\}$~\angstrom,
+$N = 300$ samples, DFTB0, noise seed~42.
 
 \begin{center}
-\begin{tabular}{llccccccc}
+\begin{tabular}{clccl}
 \toprule
-GAD variant & $\sigma$ & $N$ & NR conv & TS $|$ NR & TS / $N$ & NR med & GAD med & Wall \\
+Exp & NR config & GAD variant & NR / GAD steps & Notes \\
 \midrule
-path   & 0.5 & 287 & 275 (96\%) & 205/275 (\textbf{75\%}) & 71\% & 578  & 7  & 27h \\
-path   & 1.0 & 287 & 281 (98\%) & 124/281 (\textbf{44\%}) & 43\% & 2465 & 10 & 19h \\
-path   & 1.5 & 287 & 275 (96\%) & 93/275 (\textbf{34\%})  & 32\% & 5352 & 12 & 27h \\
-path   & 2.0 & 287 & 260 (91\%) & 40/260 (\textbf{15\%})  & 14\% & 8926 & 10 & 41h \\
-\midrule
-nopath & 0.5 & 287 & 268 (93\%) & 268/268 (\textbf{100\%}) & 93\% & 596  & 9  & 8h \\
-nopath & 1.0 & 287 & 272 (95\%) & 271/272 (\textbf{100\%}) & 94\% & 2582 & 11 & 15h \\
-nopath & 1.5 & 260$^a$ & 258$^a$ & 258/260$^a$ (\textbf{99\%}) & 99\%$^a$ & ---$^a$ & 13$^a$ & ---$^a$ \\
-nopath & 2.0 & 20$^b$ & 19 (95\%) & 18/19$^b$ (\textbf{95\%}) & 90\%$^b$ & 5685$^b$ & 34$^b$ & 51m$^b$ \\
+1 & Full v13 (kicks + late escape) & path   & 50k / 20k & + rescue \& budget ablations \\
+2 & Simple (RFO + PLS only)        & nopath & 50k / 20k & + budget ablation \\
+3 & Full v13                       & both   & 50k / 20k & Head-to-head from same minima \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\medskip
-\noindent\fbox{\parbox{0.95\textwidth}{%
-\textbf{Headline result (old criterion --- to be updated):}
-Nopath GAD achieves $\approx$100\% TS rate given NR convergence
-(268/268 at $\sigma=0.5$; 271/272 at $\sigma=1.0$; 258/260$^*$ at $\sigma=1.5$), while
-path GAD degrades from 75\% to 15\% as noise increases.  The overall TS rate is limited
-by NR convergence (93--95\%), not by GAD.\\[3pt]
-\textit{These numbers used the wrong convergence gate.  The stricter
-$n_\text{neg}=1$ criterion will yield lower TS rates.  Re-run in progress.}\\[3pt]
-$^a$Partial result (260/300 samples; run interrupted by node timeout).
-$^b$Preliminary (20 samples on login node).
-}}
+%=============================================================================
+\section{Smoke Tests (2026-03-23)}
+\label{app:smoke}
 
-\subsection{Rescue ablation (path GAD, $\sigma = 2.0$)}
-
-Running GAD on NR-failed samples (\texttt{--gad-on-nr-failure}):
+\textit{All results below used the old criterion.}
 
 \begin{center}
-\begin{tabular}{lccccc}
+\begin{tabular}{llccccc}
 \toprule
-Config & GAD ran & TS found & TS from NR-fail & Extra TS \\
+Test & GAD & $N$ & NR/GAD steps & NR conv & TS found & Mean GAD \\
 \midrule
-Normal ($\sigma=2.0$) & 260 & 40 (15\%) & 0 & --- \\
-Rescue ($\sigma=2.0$) & 287 & 40 (14\%) & 0 & \textbf{0} \\
+Medium scale ($\sigma=1.0$) & path   & 20 & 1k/1k & 55\% & 30\% & 12 \\
+Rescue ($\sigma=1.0$)       & nopath & 3  & 100/100 & 0\%  & 67\% & 2 \\
+Full v13 ($\sigma=1.0$)     & path   & 10 & 5k/1k & 100\% & 30\% & 22 \\
+NR=0 ($\sigma=1.0$)         & path   & 3  & 0/500 & ---  & 67\% & 58 \\
+NR=0 ($\sigma=1.0$)         & nopath & 3  & 0/500 & ---  & 33\% & 397 \\
+High noise ($\sigma=2.0$)   & path   & 10 & 1k/1k & 30\% & 10\% & 10 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Rescue mode provides \textbf{no benefit} for path GAD.  Path-based trust-region
-GAD cannot find TS from non-converged geometries.
+Key takeaway: GAD finds TS very quickly ($\sim$12 steps) once NR provides a
+good minimum.  At 1k steps, NR convergence is the limiting factor.
 
-\subsection{Path GAD failure mode analysis at scale}
+%=============================================================================
+\section{Head-to-Head: $\sigma = 1.0$, $N = 20$ (Phase 1)}
+\label{app:phase1}
+
+\textit{Old criterion data.}
+
+\begin{center}
+\begin{tabular}{llccccc}
+\toprule
+Exp & GAD & NR config & NR conv & TS found & Mean GAD & Wall \\
+\midrule
+1 & path   & full v13 & 100\% & 35\% & 12  & 2485s \\
+2 & nopath & simple   & 100\% & 100\% & 109 & 1334s \\
+3 & path   & full v13 & 100\% & 35\% & 12  & 2490s \\
+3 & nopath & full v13 & 100\% & 100\% & 83  & 1157s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+NR config (simple vs.\ full v13) does not affect GAD outcome.
+Nopath is 2$\times$ faster wall-clock despite more GAD steps (lower per-step cost).
+
+%=============================================================================
+\section{Path GAD Failure Analysis}
+\label{app:path-failures}
+
+\textit{Old criterion data.}
+
+\subsection{Final Morse index of failed samples}
 
 \begin{center}
 \begin{tabular}{lcccccccccc}
@@ -608,456 +384,261 @@ $\sigma$ & $n_\text{fail}$ & M0 & M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 \\
 \end{tabular}
 \end{center}
 
-At $\sigma = 0.5$, most failures are borderline (M1: near-TS). At $\sigma = 2.0$,
-failures are dominated by massive overshoot (M3--M5), indicating the trust-region
-step size is fundamentally too aggressive for high-noise starting geometries.
-
-\subsubsection{Failure mode categories}
+\subsection{Failure mode categories}
 
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-Failure mode & $\sigma=0.5$ & $\sigma=1.0$ & $\sigma=1.5$ & $\sigma=2.0$ \\
+Mode & $\sigma=0.5$ & $\sigma=1.0$ & $\sigma=1.5$ & $\sigma=2.0$ \\
 \midrule
-\texttt{singularity\_high\_index} & 29 (41\%) & 95 (61\%) & 113 (62\%) & 166 (75\%) \\
-\texttt{grad\_not\_converged}     & 29 (41\%) & 47 (30\%) & 51 (28\%)  & 28 (13\%) \\
-\texttt{minimum}                  & 10 (14\%) & 13 (8\%)  & 10 (5\%)   & 12 (5\%) \\
-\texttt{high\_index\_saddle}      & 2 (3\%)   & 2 (1\%)   & 8 (4\%)    & 14 (6\%) \\
-\midrule
-Total failures & 70 & 157 & 182 & 220 \\
+\texttt{singularity\_high\_index} & 41\% & 61\% & 62\% & 75\% \\
+\texttt{grad\_not\_converged}     & 41\% & 30\% & 28\% & 13\% \\
+\texttt{minimum}                  & 14\% & 8\%  & 5\%  & 5\% \\
+\texttt{high\_index\_saddle}      & 3\%  & 1\%  & 4\%  & 6\% \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-As noise increases, the failure profile shifts from mixed (41\% gradient-stalled,
-41\% high-index overshoot at $\sigma=0.5$) to dominated by
-\texttt{singularity\_high\_index} (75\% at $\sigma=2.0$).  This mode occurs
-when path GAD's trust-region step overshoots past the index-1 saddle and
-lands on a higher-order critical point near a near-degenerate eigenvalue
-spectrum.  The \texttt{grad\_not\_converged} mode (Morse 1 but gradient not
-below threshold) decreases from 41\% to 13\%, suggesting that at low noise
-many path GAD failures are ``almost TS'' while at high noise the overshoot
-is so severe that the optimizer never returns near an index-1 saddle.
+At low noise, failures are mixed (near-TS + overshoot).
+At high noise, 75\% are overshoot---the trust-region step is too aggressive.
 
-\subsection{Nopath GAD convergence speed}
+\subsection{Rescue mode ablation ($\sigma = 2.0$)}
 
-\begin{center}
-\begin{tabular}{lccccccc}
-\toprule
-$\sigma$ & $N_\text{conv}$ & Min & p25 & Median & p75 & p95 & Max \\
-\midrule
-0.5 & 268 & 1 & 2 & 9 & 36 & 147 & 11848 \\
-1.0 & 271 & 1 & 3 & 11 & 40 & 173 & 1201 \\
-1.5$^a$ & 258 & 2 & 4 & 13 & --- & 256 & 2522 \\
-2.0$^b$ & 18 & 2 & 6 & 34 & 177 & 1711 & 1711 \\
-\bottomrule
-\end{tabular}
-\end{center}
+Running GAD on NR-failed samples adds \textbf{zero} additional TS.
+Path GAD cannot recover from non-converged starting geometries.
 
-\noindent $^a$Partial (260/300 samples).
-$^b$Preliminary (20 samples on login node; 200-sample run in progress).
+%=============================================================================
+\section{Nopath GAD Trajectory Dynamics}
+\label{app:dynamics}
 
-\medskip
-Median convergence: \textbf{9--34 GAD steps} across $\sigma = 0.5$--$2.0$.
-The 20k step budget is $\sim$1500$\times$ what is needed at the median and
-$\sim$80$\times$ what is needed at p95.
+\textit{Old criterion data.}
 
-\subsection{Nopath GAD trajectory dynamics}
-\label{sec:dynamics}
-
-Trajectory-level analysis reveals the mechanism by which nopath GAD
-converges.  The eigenvalue-clamped step size creates a characteristic
-``overshoot--contract--converge'' pattern:
-
-\paragraph{Typical fast convergence (23 steps):}
+\subsection{Typical fast convergence (23 steps)}
 
 \begin{center}\small
 \begin{tabular}{rrrrl}
 \toprule
 Step & $\eval_0$ & Morse & $dt_\text{eff}$ & Phase \\
 \midrule
-0  & $-10^{-6}$ & 1 & 0.08 & NR minimum (near-zero $\eval$) \\
-1  & $-0.23$    & 6 & 0.009 & First overshoot (max $dt$) \\
+0  & $-10^{-6}$ & 1 & 0.08 & NR minimum \\
+1  & $-0.23$    & 6 & 0.009 & First overshoot \\
 3  & $-12.6$    & 4 & 0.0002 & Deep overshoot; $dt$ contracts \\
 8  & $-3.4$     & 2 & 0.0006 & Ascending back \\
-12 & $-0.27$    & 2 & 0.008 & Near TS \\
-13 & $-10^{-5}$ & 1 & 0.08 & Second attempt; smaller overshoot \\
+13 & $-10^{-5}$ & 1 & 0.08 & Second attempt \\
 22 & $-0.02$    & 2 & 0.08 & Converges to TS \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The self-regulating mechanism: when $|\eval_0|$ is large (deep in a saddle
-basin), $dt_\text{eff} = dt \cdot s / |\eval_0|$ shrinks to $O(10^{-4})$,
-preventing runaway.  When $|\eval_0| \to 0$ (near TS), $dt_\text{eff}$
-grows to $dt_\text{max}$, enabling escape.  This creates a natural
-oscillation that decays to the TS.
+\subsection{Slow convergence ($>$1\,000 steps)}
 
-\paragraph{Slow convergence ($>$1000 steps):}
-The single outlier per noise level oscillates chaotically through high Morse
-indices before eventually finding the index-1 TS:
+One outlier per noise level oscillates through high Morse indices before
+eventually finding the TS:
 
 \begin{center}\small
-\begin{tabular}{lcccl}
+\begin{tabular}{lccl}
 \toprule
-Sample & $\sigma$ & Steps & Morse range & Dominant index \\
+Sample & $\sigma$ & Steps & Dominant Morse index \\
 \midrule
-046 (C$_3$H$_5$NO$_2$) & 0.5 & 11849 & 0--10 & M3 (36\%), M4 (31\%) \\
-000 (C$_2$H$_3$N$_3$O$_2$) & 1.0 & 1202 & 1--12 & M8 (23\%), M7 (18\%) \\
-099 (C$_3$H$_5$NO$_2$) & 1.5 & 2522 & 1--7  & M4 (50\%), M3 (29\%) \\
+046 (C$_3$H$_5$NO$_2$) & 0.5 & 11\,849 & M3 (36\%), M4 (31\%) \\
+000 (C$_2$H$_3$N$_3$O$_2$) & 1.0 & 1\,202 & M8 (23\%), M7 (18\%) \\
+099 (C$_3$H$_5$NO$_2$) & 1.5 & 2\,522 & M4 (50\%), M3 (29\%) \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-These correspond to degenerate PES regions where multiple saddle points are nearby.
-The eigenvalue-clamped $dt$ ensures the trajectory never diverges (step sizes
-contract when $|\eval_0|$ is large), so the oscillation eventually decays.
-Even the worst case (11849 steps) is well within the 20k budget.
+Even the worst case (11\,849 steps) is within the 20k budget.
+The eigenvalue-clamped $dt$ ensures trajectories never diverge.
 
-\paragraph{All nopath failures (4 total across $\sim$820 NR-converged samples):}
-Three failures at $\sigma \leq 1.5$ are C$_3$H$_5$NO$_2$, all
-\texttt{singularity\_high\_index}, oscillating at high Morse indices (3--9).
-The fourth failure (at $\sigma = 2.0$, preliminary) is C$_2$HNO at Morse 2.
+\subsection{All nopath failures (4 across $\sim$820 NR-converged samples)}
 
 \begin{center}\small
-\begin{tabular}{lcccccc}
+\begin{tabular}{lccccl}
 \toprule
-Sample & $\sigma$ & Formula & Mean Morse & Failure mode & Path GAD? \\
+Sample & $\sigma$ & Formula & Mean Morse & Path GAD? \\
 \midrule
-168 & 1.0 & C$_3$H$_5$NO$_2$ & 6.6 & singularity\_high\_index & Also fails (M3) \\
-060 & 1.5 & C$_3$H$_5$NO$_2$ & 5.2 & singularity\_high\_index & Also fails (M2) \\
-171 & 1.5 & C$_3$H$_5$NO$_2$ & 3.9 & singularity\_high\_index & \textbf{Succeeds} (6 steps) \\
-012 & 2.0$^b$ & C$_2$HNO & 2.0 & singularity\_high\_index & --- \\
+168 & 1.0 & C$_3$H$_5$NO$_2$ & 6.6 & Also fails \\
+060 & 1.5 & C$_3$H$_5$NO$_2$ & 5.2 & Also fails \\
+171 & 1.5 & C$_3$H$_5$NO$_2$ & 3.9 & Succeeds (6 steps) \\
+012 & 2.0$^\dagger$ & C$_2$HNO & 2.0 & --- \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\noindent $^b$From 20-sample preliminary run.
-
-Two of four (168, 060) are truly pathological---both GAD variants fail.
-Sample 171 succeeds with path GAD in 6 steps but nopath oscillates for
-20k steps without converging---a stochastic divergence, not a fundamental
-impossibility.  The $\sigma = 2.0$ failure (sample 012, C$_2$HNO) is a
-new molecular formula for nopath failure, but with only 4 C$_2$HNO samples
-the rate (75\%) needs confirmation at scale.  A restart strategy could
-recover these rare failures.
-
-\subsection{NR convergence: simple vs full v13}
-
-Nopath uses simplified NR (no kicks/escapes); path uses full v13.
-NR convergence rates are comparable (93--98\%) across variants, suggesting
-that kicks and late escape provide marginal benefit at these noise levels.
+Two are truly pathological (both GAD variants fail).  Sample~171 is a
+stochastic miss---recoverable via restart.
 
 %=============================================================================
-\section{Per-Formula Analysis}
-\label{sec:performula}
-%=============================================================================
+\section{Per-Formula Breakdown}
+\label{app:performula}
 
-\noindent\textit{Note: per-formula results below used the old criterion.
-Re-run pending.}
+\textit{Old criterion data.}
 
-\medskip
-The Transition1x dataset yields 8 molecular families in our 287-sample subset.
-Two formulas dominate: C$_3$H$_5$NO$_2$ (162 samples, 56\%) and
-C$_5$H$_5$NO (97 samples, 34\%).
+\subsection{Nopath GAD}
 
-\subsection{Nopath GAD: universally effective}
-
-\begin{center}
-\begin{tabular}{lccccccccc}
+\begin{center}\small
+\begin{tabular}{lcccccccc}
 \toprule
- & \multicolumn{3}{c}{$\sigma = 0.5$} & \multicolumn{3}{c}{$\sigma = 1.0$} & \multicolumn{3}{c}{$\sigma = 1.5^a$} & \multicolumn{3}{c}{$\sigma = 2.0^b$} \\
-\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13}
-Formula & $N$ & TS & Med & $N$ & TS & Med & $N$ & TS & Med & $N$ & TS & Med \\
+ & \multicolumn{2}{c}{$\sigma = 0.5$} & \multicolumn{2}{c}{$\sigma = 1.0$}
+ & \multicolumn{2}{c}{$\sigma = 1.5^*$} & \multicolumn{2}{c}{$\sigma = 2.0^\dagger$} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+Formula & TS & Med & TS & Med & TS & Med & TS & Med \\
 \midrule
-C$_3$H$_5$NO$_2$ & 148 & 100\% & 9  & 155 & 99\% & 12 & 152 & 99\% & 13 & 4$^b$ & 100\% & 552 \\
-C$_5$H$_5$NO      & 93  & 100\% & 12 & 91  & 100\% & 10 & 84  & 100\% & 12 & ---$^b$ & --- & --- \\
-C$_3$H$_8$N$_2$O  & 8   & 100\% & 4  & 7   & 100\% & 5  & 4   & 100\% & 18 & ---$^b$ & --- & --- \\
-C$_2$H$_5$NO$_2$  & 5   & 100\% & 4  & 6   & 100\% & 18 & 6   & 100\% & 9  & 5$^b$ & 100\% & 63 \\
-C$_2$H$_3$N$_3$O$_2$ & 5 & 100\% & 1 & 5   & 100\% & 47 & 5   & 100\% & 39 & 5$^b$ & 100\% & 3 \\
-C$_2$HNO           & 4   & 100\% & 28 & 4   & 100\% & 31 & 4   & 100\% & 126 & 4$^b$ & 75\% & 23 \\
-C$_3$HNO$_2$       & 4   & 100\% & 2  & 3   & 100\% & 66 & 4   & 100\% & 40 & ---$^b$ & --- & --- \\
-C$_2$HNO$_3$       & 1   & 100\% & 41 & 1   & 100\% & 72 & 1   & 100\% & 49 & 1$^b$ & 100\% & 72 \\
+C$_3$H$_5$NO$_2$ & 100\% & 9  & 99\% & 12 & 99\% & 13 & 100\% & 552 \\
+C$_5$H$_5$NO      & 100\% & 12 & 100\% & 10 & 100\% & 12 & --- & --- \\
+C$_3$H$_8$N$_2$O  & 100\% & 4  & 100\% & 5  & 100\% & 18 & --- & --- \\
+C$_2$H$_5$NO$_2$  & 100\% & 4  & 100\% & 18 & 100\% & 9  & 100\% & 63 \\
+C$_2$H$_3$N$_3$O$_2$ & 100\% & 1 & 100\% & 47 & 100\% & 39 & 100\% & 3 \\
+C$_2$HNO           & 100\% & 28 & 100\% & 31 & 100\% & 126 & 75\% & 23 \\
+C$_3$HNO$_2$       & 100\% & 2  & 100\% & 66 & 100\% & 40 & --- & --- \\
+C$_2$HNO$_3$       & 100\% & 41 & 100\% & 72 & 100\% & 49 & 100\% & 72 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\noindent $^a$Partial (260/300 samples).
-$^b$Preliminary (20 samples on login node; only 5 formulas represented in small sample).
-$N$ = NR-converged samples per formula.
+Every formula $\geq$98.7\% TS rate across $\sigma = 0.5$--$1.5$.
 
-\medskip
-\textbf{Every formula achieves $\geq$98.7\% TS rate given NR convergence across all noise levels.}
-The 3 total nopath failures across 800 NR-converged samples: 1 at $\sigma=1.0$ (NaN eigenvalue---calculator
-crash, not algorithmic), 2 at $\sigma=1.5$ (both \texttt{singularity\_high\_index} at Morse 2--7).
+\subsection{Path GAD}
 
-\subsection{Path GAD per-formula comparison}
-
-\begin{center}
+\begin{center}\small
 \begin{tabular}{lcccc}
 \toprule
 Formula & $\sigma = 0.5$ & $\sigma = 1.0$ & $\sigma = 1.5$ & $\sigma = 2.0$ \\
 \midrule
-C$_3$H$_5$NO$_2$ & 109/153 (71\%) & 82/160 (51\%) & 53/156 (34\%) & 23/148 (16\%) \\
-C$_5$H$_5$NO      & 73/94 (78\%)   & 33/93 (35\%)  & 32/93 (34\%)  & 16/87 (18\%) \\
-C$_3$H$_8$N$_2$O  & 7/8 (88\%)     & 2/8 (25\%)    & 3/6 (50\%)    & 0/6 (0\%) \\
-C$_2$H$_5$NO$_2$  & 3/6 (50\%)     & 2/6 (33\%)    & 2/6 (33\%)    & 0/5 (0\%) \\
-C$_2$H$_3$N$_3$O$_2$ & 5/5 (100\%) & 1/5 (20\%)    & 0/5 (0\%)     & 0/5 (0\%) \\
-C$_2$HNO           & 4/4 (100\%)    & 2/4 (50\%)    & 1/4 (25\%)    & 1/4 (25\%) \\
-C$_3$HNO$_2$       & 3/4 (75\%)     & 2/4 (50\%)    & 2/4 (50\%)    & 0/4 (0\%) \\
-C$_2$HNO$_3$       & 1/1 (100\%)    & 0/1 (0\%)     & 0/1 (0\%)     & 0/1 (0\%) \\
+C$_3$H$_5$NO$_2$ & 71\% & 51\% & 34\% & 16\% \\
+C$_5$H$_5$NO      & 78\% & 35\% & 34\% & 18\% \\
+C$_3$H$_8$N$_2$O  & 88\% & 25\% & 50\% & 0\% \\
+C$_2$H$_5$NO$_2$  & 50\% & 33\% & 33\% & 0\% \\
+C$_2$H$_3$N$_3$O$_2$ & 100\% & 20\% & 0\% & 0\% \\
+C$_2$HNO           & 100\% & 50\% & 25\% & 25\% \\
+C$_3$HNO$_2$       & 75\% & 50\% & 50\% & 0\% \\
+C$_2$HNO$_3$       & 100\% & 0\% & 0\% & 0\% \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Path GAD degrades across \emph{all} molecular families as noise increases.
-Several formulas (C$_2$H$_3$N$_3$O$_2$, C$_2$H$_5$NO$_2$, C$_3$H$_8$N$_2$O,
-C$_3$HNO$_2$, C$_2$HNO$_3$) reach 0\% at $\sigma = 2.0$.
-By contrast, nopath GAD achieves $\geq$98.7\% for every formula at every noise level tested.
+Degradation is universal across all molecular families.
 
-\subsection{Total step budget (NR + GAD combined)}
+%=============================================================================
+\section{Step Budget Details}
+\label{app:budget}
 
-\subsubsection{GAD-only step count}
+\textit{Old criterion data.}
+
+\subsection{GAD-only step count}
 
 \begin{center}
 \begin{tabular}{lccccc}
 \toprule
 Config & Median & Mean & p95 & Max \\
 \midrule
-nopath $\sigma=0.5$ & \textbf{10}  & 79   & 148   & 11849 \\
-nopath $\sigma=1.0$ & \textbf{12}  & 121  & 182   & 20000 \\
-nopath $\sigma=1.5$ & \textbf{13}  & 207  & 294   & 20000 \\
+nopath $\sigma=0.5$ & \textbf{10}  & 79   & 148   & 11\,849 \\
+nopath $\sigma=1.0$ & \textbf{12}  & 121  & 182   & 20\,000 \\
+nopath $\sigma=1.5$ & \textbf{13}  & 207  & 294   & 20\,000 \\
 \midrule
-path $\sigma=0.5$   & 9     & 5214  & 20000 & 20000 \\
-path $\sigma=1.0$   & 20000 & 11678 & 20000 & 20000 \\
-path $\sigma=1.5$   & 20000 & 13531 & 20000 & 20000 \\
-path $\sigma=2.0$   & 20000 & 17069 & 20000 & 20000 \\
+path $\sigma=0.5$   & 9     & 5\,214  & 20\,000 & 20\,000 \\
+path $\sigma=1.0$   & 20\,000 & 11\,678 & 20\,000 & 20\,000 \\
+path $\sigma=1.5$   & 20\,000 & 13\,531 & 20\,000 & 20\,000 \\
+path $\sigma=2.0$   & 20\,000 & 17\,069 & 20\,000 & 20\,000 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Nopath GAD's median step count is 10--13 regardless of noise level.
-At $\sigma \geq 1.0$, path GAD's \emph{median} is 20000 (the step budget limit),
-meaning $>$50\% of samples exhaust the full budget without converging.
-A 1000-step GAD budget would suffice for $\geq$99.6\% of nopath samples.
+At $\sigma \geq 1.0$, path GAD's \emph{median} is the budget ceiling (20k).
 
-\subsubsection{NR + GAD total pipeline budget}
-
-Mean total steps (NR + GAD) for samples that find a TS:
-
-\begin{center}
-\begin{tabular}{lcccc}
-\toprule
-Config & $\sigma$ & Mean NR & Mean GAD & Mean total \\
-\midrule
-nopath & 0.5 & 2909 & 79   & 2988 \\
-nopath & 1.0 & 5839 & 47   & 5886 \\
-\midrule
-path   & 0.5 & 2625 & 164  & 2789 \\
-path   & 1.0 & 5579 & 1141 & 6720 \\
-path   & 1.5 & 8066 & 871  & 8937 \\
-path   & 2.0 & 12731 & 949 & 13680 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-For nopath, the GAD phase adds $<$3\% to the total step budget (79/2988 at $\sigma=0.5$,
-47/5886 at $\sigma=1.0$).  The NR phase dominates the cost.  For path, GAD adds
-17--20\% of total steps, and path GAD failures waste their entire 20k GAD budget.
-
-\subsubsection{Nopath GAD step distribution (cumulative)}
+\subsection{Nopath cumulative distribution}
 
 \begin{center}
 \begin{tabular}{lcccccc}
 \toprule
 $\sigma$ & $\leq 5$ & $\leq 20$ & $\leq 50$ & $\leq 200$ & $\leq 1000$ & $>1000$ \\
 \midrule
-0.5 & 37\% & 65\% & 83\% & 96\% & 99.6\% & 0.4\% (1) \\
-1.0 & 35\% & 60\% & 79\% & 96\% & 99.6\% & 0.4\% (1) \\
-1.5 & 30\% & 61\% & 80\% & 94\% & 99.6\% & 0.4\% (1) \\
-2.0$^b$ & 39\% & 44\% & 56\% & 83\% & 89\% & 11\% (2) \\
+0.5 & 37\% & 65\% & 83\% & 96\% & 99.6\% & 0.4\% \\
+1.0 & 35\% & 60\% & 79\% & 96\% & 99.6\% & 0.4\% \\
+1.5 & 30\% & 61\% & 80\% & 94\% & 99.6\% & 0.4\% \\
+2.0$^\dagger$ & 39\% & 44\% & 56\% & 83\% & 89\% & 11\% \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-At $\sigma \leq 1.5$, the distribution is remarkably invariant to noise level:
-about 1/3 of samples converge in $\leq 5$ GAD steps, 80\% in $\leq 50$, and
-exactly 1 outlier per noise level requires $>1000$ steps.  At $\sigma = 2.0$
-(preliminary, $n=18$), the distribution shifts slightly slower: 56\% at $\leq 50$
-steps, 83\% at $\leq 200$.  A 1000-step GAD budget suffices for $\geq 99.6\%$
-at $\sigma \leq 1.5$; the $\sigma = 2.0$ budget may need $\sim$2000 steps
-(to be confirmed with the full 300-sample run).
+Distribution is remarkably invariant to noise at $\sigma \leq 1.5$.
 
-%=============================================================================
-\section{Comparison with Standalone NR v13}
-\label{sec:standalone}
-%=============================================================================
-
-\noindent\textit{Note: hybrid TS rates below used the old criterion.
-NR convergence numbers are unaffected (NR phase is separate).}
-
-\medskip
-Standalone NR v13 (full kicks, 50k steps, DFTB0) finds \emph{minima}.
-The hybrid pipeline finds \emph{transition states}.  The comparison shows
-what the GAD phase adds:
+\subsection{NR + GAD total pipeline}
 
 \begin{center}
 \begin{tabular}{lcccc}
 \toprule
-$\sigma$ & NR-only minima & Hybrid NR$\to$GAD TS & Difference & Rate \\
+Config & $\sigma$ & Mean NR & Mean GAD & GAD fraction \\
 \midrule
-0.5 & 281/287 (97.9\%) & 268/287 (93.4\%) & $-13$ & 95.4\% of NR minima $\to$ TS \\
-1.0 & 278/287 (96.9\%) & 271/287 (94.4\%) & $-7$  & 97.5\% of NR minima $\to$ TS \\
-1.5 & 277/287 (96.5\%) & 258/260$^a$ (99.2\%) & --- & $\approx$99\% of NR minima $\to$ TS \\
-2.0 & 267/287 (93.0\%) & 18/19$^b$ (94.7\%) & --- & $\approx$95\% of NR minima $\to$ TS \\
+nopath & 0.5 & 2\,909 & 79   & 2.6\% \\
+nopath & 1.0 & 5\,839 & 47   & 0.8\% \\
+\midrule
+path   & 0.5 & 2\,625 & 164  & 5.9\% \\
+path   & 1.0 & 5\,579 & 1\,141 & 17.0\% \\
+path   & 1.5 & 8\,066 & 871  & 9.7\% \\
+path   & 2.0 & 12\,731 & 949 & 6.9\% \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The gap at $\sigma \leq 1.0$ (13 at $\sigma=0.5$, 7 at $\sigma=1.0$) is entirely
-from the hybrid using \emph{simple} NR (no kicks), which converges 93--95\% vs
-full v13's 97--98\%.  At $\sigma=1.5$, partial data shows $\approx$99\% conversion
-of NR-converged minima to TS.  At $\sigma=2.0$, preliminary data ($n=19$) shows
-$\approx$95\% conversion.  If the hybrid used full v13 NR, the TS count would
-approach or match the standalone NR minimum count---i.e., virtually every
-NR-converged minimum yields a TS via nopath GAD.
+%=============================================================================
+\section{Comparison with Standalone NR v13}
+\label{app:standalone}
 
-\noindent $^a$Partial (260 samples). $^b$Preliminary (19 samples).
+\textit{NR convergence numbers are unaffected by the criterion fix.
+Hybrid TS rates used the old criterion.}
 
-\textbf{For the cost of $\sim$10 additional GAD steps (median), every minimum
-is converted to a transition state.}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+$\sigma$ & NR-only minima & Hybrid TS & NR $\to$ TS rate \\
+\midrule
+0.5 & 281/287 (97.9\%) & 268/287 (93.4\%) & 95.4\% \\
+1.0 & 278/287 (96.9\%) & 271/287 (94.4\%) & 97.5\% \\
+1.5 & 277/287 (96.5\%) & 258/260$^*$ & $\approx$99\% \\
+2.0 & 267/287 (93.0\%) & 18/19$^\dagger$ & $\approx$95\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The gap at $\sigma \leq 1.0$ is entirely from the hybrid using simple NR (no
+kicks) which converges 93--95\% vs.\ full v13's 97--98\%.
 
 %=============================================================================
-\section{Conclusions and Recommendations}
-\label{sec:conclusions}
-%=============================================================================
+\section{NR Relaxed Convergence and Residual Forces}
+\label{app:residual}
 
-\noindent\colorbox{yellow!30}{\parbox{0.95\textwidth}{%
-\textbf{Provisional.}  All conclusions below are based on data collected with
-the old convergence criterion.  The qualitative ranking (nopath $\gg$ path) and
-mechanistic explanations are expected to hold under the corrected
-$n_\text{neg} = 1$ criterion, but specific TS rates will decrease.
-A 3-sample smoke test with the new criterion confirmed nopath still converges
-to true Morse-1 saddles (mean $\sim$566 GAD steps vs.\ $\sim$12 with old criterion).
-These conclusions will be updated when the full re-run is complete.
-}}
+\textit{Old criterion data.}
 
-\subsection{Summary of findings (provisional)}
+Many NR-converged samples have residual forces 0.02--0.97~eV/$\angstrom$,
+far above the $10^{-4}$ nominal threshold.  These are accepted via
+\texttt{--nr-accept-relaxed} (Morse index~0 + forces below relaxed threshold).
 
-\begin{enumerate}
-  \item \textbf{Nopath (Markovian) GAD dominates path GAD on every metric.}
-        Across $N \approx 260$--$287$ samples per noise level, nopath achieves
-        $\geq$95\% TS rate given NR convergence ($\sigma = 0.5$--$2.0$),
-        while path GAD degrades from 75\% ($\sigma=0.5$) to 15\% ($\sigma=2.0$).
-        Path GAD's trust-region mechanism causes catastrophic overshoot to
-        higher-index saddle points (Morse 2--8).
+\begin{center}
+\begin{tabular}{cccl}
+\toprule
+Sample & NR force norm & NR min $\eval$ & Path GAD result \\
+\midrule
+9  & 0.970 & 0.0033 & Fail (M3) \\
+7  & 0.114 & $6.8\times10^{-6}$ & Fail (M1) \\
+4  & 0.119 & $2.3\times10^{-7}$ & Fail (M4) \\
+3  & 0.067 & $3.3\times10^{-4}$ & Fail (M1) \\
+5  & --- & --- & Success (7 steps) \\
+18 & --- & --- & Success (6 steps) \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-  \item \textbf{The bottleneck is NR, not GAD.}
-        Overall TS rate $\approx$ NR convergence rate $\times$ 95--100\%.
-        At $\sigma=0.5$: 93\%.  At $\sigma=1.0$: 95\%.  At $\sigma=1.5$: 99\%$^a$.
-        Improving NR convergence directly improves end-to-end TS yield.
-
-  \item \textbf{GAD convergence is very fast.}
-        Median 9--34 steps ($\sigma = 0.5$--$2.0$).  A budget of 2000 GAD steps
-        suffices for $\geq$95\% of samples at all noise levels tested.
-
-  \item \textbf{NR configuration is secondary.}
-        Simple NR (no kicks) vs full v13 NR gives nearly identical
-        outcomes.  The GAD variant is the decisive factor.
-
-  \item \textbf{Rescue mode is ineffective for path GAD.}
-        Zero additional TS found from NR-failed samples.
-
-  \item \textbf{Nopath is also 2--3$\times$ faster} wall-clock, since failed path GAD
-        samples waste time exhausting 20k steps.
-
-  \item \textbf{$\geq$98.7\% TS rate is universal across molecular families.}
-        All 8 formulas in the dataset achieve $\geq$98.7\% (given NR convergence)
-        across $\sigma = 0.5$--$1.5$.  3 total failures in 800 NR-converged samples:
-        1 calculator crash (NaN), 2 \texttt{singularity\_high\_index}.
-
-  \item \textbf{Path GAD failure modes shift with noise.}
-        At low noise: 41\% gradient-stalled (near-TS) + 41\% high-index overshoot.
-        At high noise: 75\% high-index overshoot dominates.  The trust-region
-        mechanism is fundamentally unsuited for climbing from deep minima.
-
-  \item \textbf{Comparison with LJ results} (Section~\ref{sec:lj-connection}):
-        the nopath GAD + NR hybrid on DFTB0 achieves 93--95\% end-to-end
-        TS rate, comparable to the LJ relaxed convergence of 95--99\%.
-        Both are limited by NR convergence, not by the saddle-search phase.
-\end{enumerate}
-
-\subsection{Recommended pipeline for generative modelling}
-
-\begin{enumerate}[nosep]
-  \item \textbf{Phase 1:} Simple NR minimization (RFO + PLS, no kicks), 50k steps.
-  \item \textbf{Phase 2:} Nopath GAD with eigenvalue-clamped $dt$, 1000 steps
-        (covers 99.6\% of samples; extend to 2000 for full coverage minus 1 outlier per $\sim$270 samples).
-  \item \textbf{Expected yield:} 93--95\% end-to-end TS rate at $\sigma \leq 1.0$~$\angstrom$;
-        95+\% at $\sigma = 2.0$ (preliminary, $n=19$).
-\end{enumerate}
-
-Every step in both phases is a pure function of $(\text{coords}, E, \vect{F}, \hess)$ ---
-no trajectory history, no kick counters, no trust-region state.  This makes the
-full pipeline suitable for training a generative model that learns the optimization policy.
-
-\medskip
-\noindent\textbf{Potential improvement:} The 3 nopath failures (0.4\%) could be recovered
-via a simple restart strategy (re-run GAD with a different random seed).  Sample 171
-succeeds with path GAD in 6 steps, confirming the TS is reachable.  Expected yield
-with restart: $>$99.5\%.
-
-\subsection{Connection to LJ results}
-\label{sec:lj-connection}
-
-The LJ experiments (separate document) showed that the v13 NR optimizer
-generalizes across PES types, achieving 95--99\% relaxed convergence on a
-pairwise potential.  The hybrid NR$\to$GAD results add:
-
-\begin{itemize}[nosep]
-  \item On DFTB0, NR convergence is 93--98\% (depending on noise and config).
-  \item Nopath GAD converts NR-converged minima to TS with $\approx$100\% success.
-  \item The combined pipeline gives 93--95\% end-to-end minimum$\to$TS rate.
-  \item Both LJ and DFTB0 share the same pattern: \textbf{the optimizer finds
-        force-converged critical points robustly; the remaining question is
-        which type of critical point} (minimum for NR, index-1 saddle for GAD).
-\end{itemize}
-
-\subsection{Remaining experiments}
-
-\textbf{All experiments must be re-run} with the corrected $n_\text{neg} = 1$
-criterion (Section~\ref{sec:criterion}).  Prior results used the wrong gate.
-
-\medskip
-\noindent\textbf{Currently running (fixed code):}
-\begin{itemize}[nosep]
-  \item Nopath $\sigma = 2.0$, 300 samples on login node (4 workers), output:
-        \texttt{nr\_gad\_login\_n2.0\_nopath\_300s\_v2/}
-\end{itemize}
-
-\noindent\textbf{Queued (SLURM, fixed code, pending cluster recovery):}
-\begin{itemize}[nosep]
-  \item \texttt{run\_remaining.sh} (job 1227779): 9 configurations ---
-        nopath $\sigma \in \{1.5, 2.0\}$, NR-20k ablation,
-        full v13 NR + nopath $\times$ 4 noise levels, GAD-only controls
-\end{itemize}
-
-\noindent\textbf{Still needed (not yet queued):}
-\begin{itemize}[nosep]
-  \item Re-run path GAD experiments (Exp 1) at all noise levels with fixed criterion
-  \item Re-run nopath $\sigma \in \{0.5, 1.0\}$ with fixed criterion
-  \item TS identity check: does the found TS match the known Transition1x TS?
-  \item Re-generate all 7 analysis plots with new data
-\end{itemize}
-
-\noindent Cluster in maintenance (all 1220 nodes down/draining as of 2026-03-24).
+Imprecise NR convergence compounds path GAD's overshoot.
+Nopath GAD's self-regulating $dt$ is robust to this imprecision.
 
 %=============================================================================
 % Data reference
 %=============================================================================
 % Phase 1: /scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0321/
 % Phase 2: /scratch/memoozd/ts-tools-scratch/runs/nr_gad_tri0279/
-% Remaining: run_remaining.sh (ready for next node)
+% Plots:   /scratch/memoozd/ts-tools-scratch/runs/nr_gad_plots/
+% Script:  src/noisy/v2_tests/scripts/plot_hybrid_results.py
 % Seed: 42, 48 workers x 4 threads, 192 CPUs
 
 \end{document}

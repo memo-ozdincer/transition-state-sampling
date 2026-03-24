@@ -22,6 +22,8 @@
 \usepackage{colortbl}
 \usepackage{tcolorbox}
 \usepackage{tabularx}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
 
 % --- Color palette ---
 \definecolor{ljblue}{HTML}{1565C0}
@@ -264,6 +266,16 @@ minima on a fundamentally different PES---the ``failures'' are a
 \emph{criterion problem}, not an optimizer problem.
 \end{tcolorbox}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig_strict_vs_relaxed.png}
+\caption{Strict vs.\ relaxed convergence rates.  \textbf{Left:} LJ shows
+  a dramatic gap---strict collapses from 92\% to 7\% while relaxed stays
+  above 95\%.  \textbf{Right:} DFTB0 shows no gap (strict $\approx$ relaxed)
+  because ghost modes are absent.}
+\label{fig:strict-vs-relaxed}
+\end{figure}
+
 \subsubsection{Force convergence at the solution}
 \label{sec:force-stats}
 
@@ -292,6 +304,35 @@ typically happens mid-optimization.  Relaxed samples are tightly
 clustered just below $10^{-4}$, having continued optimizing until force
 convergence.
 
+\paragraph{Force--eigenvalue anticorrelation.}
+$\bar{F}$ and $n_\text{neg}$ are \textbf{negatively correlated}
+($\rho = -0.35$ to $-0.59$): more ghost eigenvalues $\Rightarrow$ lower
+forces.  This is consistent with the optimizer freely minimizing forces
+when it is not constrained by eigenvalue positivity.
+
+\paragraph{Phase portrait.}
+The $(\lambda_\text{min},\;\bar{F})$ plane reveals two distinct
+populations at $n{=}2.0$:
+\begin{itemize}[nosep]
+  \item \textbf{Strict cluster} (upper right): $\bar{F} \sim 5 \times 10^{-3}$,
+    $\lambda_\text{min} > 0$, $n_\text{neg}{=}0$
+  \item \textbf{Relaxed cluster} (lower left): $\bar{F} \sim 10^{-4}$,
+    $\lambda_\text{min}$ slightly negative, $n_\text{neg} \approx 6$
+\end{itemize}
+The two populations are \emph{clearly separated}---there is no continuum
+between them.  At $n{=}0.5$, only the strict cluster exists.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig_force_distribution.png}
+\caption{Force norm $\bar{F}$ at convergence (log scale).
+  Green = strict-converged (no force check, $\bar{F} \sim 5 \times 10^{-3}$);
+  blue = relaxed-converged ($\bar{F}$ tightly clustered below $10^{-4}$).
+  Red dashed line = force threshold $\varepsilon = 10^{-4}$.
+  Strict samples are ${\sim}50\times$ above threshold.}
+\label{fig:force-dist}
+\end{figure}
+
 % -------------------------------------------------------------------
 \subsection{The strict--relaxed gap: the central diagnostic}
 % -------------------------------------------------------------------
@@ -319,6 +360,15 @@ Noise & LJ strict & LJ relaxed & \textnormal{LJ gap} & DFTB0 gap \\
 
 The gap grows from 3\,pts to \textbf{93\,pts} as noise increases.  On
 DFTB0 it is always ${\sim}0$.  Why?
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{fig_gap.png}
+\caption{The strict--relaxed gap.  LJ's gap explodes with noise
+  (2.8$\to$92.7\,pts); DFTB0's is always ${\sim}$0.  The gap is entirely
+  due to ghost modes from LJ's missing angular terms.}
+\label{fig:gap}
+\end{figure}
 
 % -------------------------------------------------------------------
 \subsection{Aggregate: LJ vs.\ DFTB0 v13}
@@ -426,6 +476,43 @@ optimizer failure---it is an \textbf{inappropriate criterion} for pairwise
 potentials.  The relaxed criterion resolves this completely.
 \end{tcolorbox}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig_nneg_distribution.png}
+\caption{Distribution of $n_\text{neg}$ (number of negative eigenvalues)
+  at convergence.  Green bars = strict ($n_\text{neg}{=}0$).  As noise
+  increases, the distribution shifts right---at $n{=}2.0$, the median
+  sample has $\sim$6 ghost eigenvalues, and only 19 of 285 land at
+  $n_\text{neg}{=}0$ by chance.}
+\label{fig:nneg}
+\end{figure}
+
+\subsection{Ghost modes appear from the very start}
+\label{sec:ghost-onset}
+
+Ghost eigenvalues ($|\lambda| < 10^{-4}$) appear \textbf{extremely
+early} in LJ optimization---they are not a convergence artifact:
+
+\begin{center}\small
+\begin{tabular}{c cc}
+\toprule
+Noise & Median $\bar{F}$ at ghost onset & \% appearing before $\bar{F} < 10^{-2}$ \\
+\midrule
+0.5\,\AA & $6.2 \times 10^{-1}$ & 71.6\% \\
+1.0\,\AA & $1.3 \times 10^{-1}$ & 73.3\% \\
+1.5\,\AA & $1.8 \times 10^{-2}$ & 51.8\% \\
+2.0\,\AA & $1.6 \times 10^{-3}$ & 28.4\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+At $n{=}0.5$, ghost modes appear when forces are still ${\sim}0.6$\,eV/\AA{}
+(barely started).  \textbf{100\% of LJ trajectories develop ghost modes}
+(or have them from the start at high noise).  No amount of further
+optimization will remove them---they are a permanent topological feature
+of the pairwise PES.
+
 \subsection{How small are the ghost eigenvalues?}
 \label{sec:eval-magnitudes}
 
@@ -465,6 +552,17 @@ $10^{-3}$--$10^{-2}$ & --- & ---       & ---       & 3 (1\%)   \\
 \end{itemize}
 \end{tcolorbox}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig_eigenvalue_histogram.png}
+\caption{Distribution of $\log_{10}|\lambda_\text{min}|$ at convergence.
+  Blue = relaxed-converged samples (ghost modes, $\lambda < 0$);
+  green = strict-converged ($\lambda > 0$).
+  Ghost eigenvalues cluster at $|\lambda| \sim 10^{-5}$, far below any
+  physically meaningful curvature.}
+\label{fig:eigenvalue-hist}
+\end{figure}
+
 \paragraph{Number of ghost modes per sample:}
 At $n{=}2.0$, relaxed samples have median $n_\text{neg}{=}6$ and mean $7.0$
 (range 1--19).  The count grows roughly linearly with noise---consistent
@@ -492,6 +590,42 @@ from the $\varepsilon^{1/2}$ theorem is $5\times$ looser than
 necessary.  A threshold of $\tau = 5 \times 10^{-4}$ would capture
 96\% of relaxed samples even at $n{=}2.0$.  At $\tau = 10^{-3}$:
 99\%.
+
+\paragraph{2D threshold sweep.}
+A joint criterion $(\bar{F} < F_\text{thresh})$ AND
+$(\lambda_\text{min} \geq -\tau)$ applied to all samples' final states
+reveals which ``knob'' matters:
+
+\begin{center}\small
+\begin{tabular}{c ccc}
+\toprule
+Noise & $\bar{F}{<}10^{-2}$, $\tau{=}0.1$ & $\bar{F}{<}10^{-4}$, $\tau{=}10^{-3}$
+  & $\bar{F}{<}10^{-4}$, strict \\
+\midrule
+0.5 & 96.0\% & 95.6\% & 0.0\%* \\
+1.0 & 96.8\% & 31.5\% & 0.0\%  \\
+1.5 & 98.2\% & 64.9\% & 0.0\%  \\
+2.0 & 99.6\% & 91.9\% & 0.0\%  \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+*$\bar{F}{<}10^{-4}$ AND strict gives 0\% because strict-converged
+samples have $\bar{F} \sim 5 \times 10^{-3}$.  On LJ, the eigenvalue
+threshold $\tau$ is the ``knob''---relaxing $\tau$ from strict to
+$10^{-3}$ recovers most samples.  Force threshold matters little
+above $10^{-3}$.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{fig_cascade.png}
+\caption{Cascade: convergence rate vs.\ eigenvalue threshold $\tau$.
+  The steep rise from $\tau{=}0$ to $\tau{=}10^{-4}$ shows that most
+  ghost modes have $|\lambda| < 10^{-4}$.  The curve plateaus by
+  $\tau{=}2 \times 10^{-3}$.}
+\label{fig:cascade}
+\end{figure}
 
 \begin{remark}
 The spectral gap is \textbf{clean}: ghost eigenvalues live in
@@ -545,6 +679,166 @@ $\kappa \sim 10^6$, the optimizer converges reliably---RFO is
 condition-number-agnostic by design.
 \end{tcolorbox}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{fig_conditioning.png}
+\caption{Hessian condition number $\kappa \approx |\lambda_\text{max}|/|\lambda_\text{min}|$
+  at convergence.  $\kappa$ rises $1000\times$ from $n{=}0.5$ to $n{=}2.0$
+  because ghost eigenvalues ($|\lambda| \sim 10^{-5}$) enter the
+  denominator.  Despite $\kappa \sim 10^6$, RFO converges reliably.}
+\label{fig:conditioning}
+\end{figure}
+
+% =============================================================================
+\section{Force and Eigenvalue Convergence Are Mutually Exclusive}
+\label{sec:mutual-exclusivity}
+% =============================================================================
+
+Trajectory analysis (80-sample subset per noise level) reveals that
+\textbf{zero LJ samples achieve both $\bar{F} < 10^{-4}$ and
+$n_\text{neg}{=}0$ at any point during optimization}:
+
+\begin{center}\small
+\begin{tabular}{c cccc}
+\toprule
+Noise & Reach $n_\text{neg}{=}0$ only & Reach $\bar{F}{<}10^{-4}$ only
+  & Both & Neither \\
+\midrule
+0.5\,\AA & 78 & 2  & \textbf{0} & 2 \\
+1.0\,\AA & 57 & 23 & \textbf{0} & 6 \\
+1.5\,\AA & 28 & 52 & \textbf{0} & 3 \\
+2.0\,\AA & 7  & 73 & \textbf{0} & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The optimizer must choose: stop at $n_\text{neg}{=}0$ (strict, high forces)
+or continue lowering forces at the cost of acquiring ghost eigenvalues
+(relaxed, low forces).  There is \emph{no regime where both conditions
+hold simultaneously} under standard convergence.
+
+\paragraph{Force at eigenvalue convergence.}
+When $n_\text{neg}$ first reaches~0, forces are far from converged:
+
+\begin{center}\small
+\begin{tabular}{c cccc}
+\toprule
+Noise & Median $\bar{F}$ at $n_\text{neg}{=}0$ & Min $\bar{F}$ & Max $\bar{F}$
+  & $\bar{F} < 10^{-3}$? \\
+\midrule
+0.5\,\AA & $5.2 \times 10^{-3}$ & $3.0 \times 10^{-3}$ & $1.2 \times 10^{-2}$ & 0\% \\
+1.0\,\AA & $5.9 \times 10^{-3}$ & $1.5 \times 10^{-3}$ & $1.2 \times 10^{-2}$ & 0\% \\
+1.5\,\AA & $6.0 \times 10^{-3}$ & $2.0 \times 10^{-3}$ & $1.2 \times 10^{-2}$ & 0\% \\
+2.0\,\AA & $6.2 \times 10^{-3}$ & $2.8 \times 10^{-3}$ & $8.4 \times 10^{-3}$ & 0\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+\textbf{No sample on any noise level has $\bar{F} < 10^{-3}$ when
+$n_\text{neg}$ first hits~0.}  Strict convergence fires at forces
+$10$--$50\times$ above even a generous force threshold.
+
+% =============================================================================
+\section{Phase 3: Force-Gated Convergence on LJ}
+\label{sec:force-gate}
+% =============================================================================
+
+The mutual exclusivity finding assumed the standard optimizer (which stops
+at $n_\text{neg}{=}0$).  Can a \textbf{force gate}---requiring both
+$n_\text{neg}{=}0$ \emph{and} $\bar{F} < 10^{-4}$ for strict
+convergence---produce genuine dual-converged solutions?
+
+\paragraph{Code change (v14):}
+\begin{verbatim}
+# Standard:  strict_converged = n_neg == 0
+# Force-gated: strict_converged = n_neg == 0 and force_norm < force_converged
+\end{verbatim}
+Backward-compatible via the \texttt{--strict-force-gate} CLI flag.
+
+\subsection{Force-gated strict convergence}
+
+\begin{table}[h]
+\centering
+\caption{Force gate on LJ: 50-sample experiments at $n{=}2.0$ and $n{=}1.0$.}
+\label{tab:force-gate}
+\begin{tabular}{l cccccc}
+\toprule
+& \multicolumn{3}{c}{$n{=}2.0$\,\AA{} ($N{=}50$)} & \multicolumn{3}{c}{$n{=}1.0$\,\AA{} ($N{=}48$)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Metric & Control & Gated & $\Delta$ & Control & Gated & $\Delta$ \\
+\midrule
+Converged & 50 (100\%) & 49 (98\%) & $-$1
+          & 47 (97.9\%) & 46 (95.8\%) & $-$1 \\
+Strict    & 6 & 5 & $-$1 & 33 & 32 & $-$1 \\
+Relaxed   & 44 & 44 & 0 & 14 & 14 & 0 \\
+\midrule
+Strict $\bar{F}$ median & $6.1 \times 10^{-3}$ & $8.5 \times 10^{-5}$
+  & \cellcolor{successlight}$73\times$ & $6.1 \times 10^{-3}$ & $8.1 \times 10^{-5}$
+  & \cellcolor{successlight}$75\times$ \\
+Overall $\bar{F}$ max & $8.4 \times 10^{-3}$ & $1.0 \times 10^{-4}$
+  & \cellcolor{successlight}$84\times$ & $1.2 \times 10^{-2}$ & $1.0 \times 10^{-4}$
+  & \cellcolor{successlight}$123\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{tcolorbox}[finding, title=Finding 5: Force gate produces dual convergence]
+\begin{enumerate}[nosep]
+  \item \textbf{Dual convergence exists on LJ.}  With the force gate,
+    5/50 samples at $n{=}2.0$ and 32/48 at $n{=}1.0$ achieve
+    $n_\text{neg}{=}0$ \emph{and} $\bar{F} < 10^{-4}$---genuine
+    dual-converged solutions.  Phase~1 found ``both = 0'' because the
+    standard optimizer stops at $n_\text{neg}{=}0$ before forces converge.
+  \item \textbf{Minimal convergence loss.}  Only 1 sample lost per noise
+    level ($-$2\,pts).
+  \item \textbf{Strict force quality improves $73$--$75\times$.}
+    The force gate transforms strict convergence from a low-quality
+    shortcut into a genuine dual-convergence event.
+  \item \textbf{Maximum $\bar{F}$ drops from $10^{-2}$ to $10^{-4}$}---no
+    ``converged'' sample has high forces.
+  \item \textbf{Dual convergence scales with noise.}  At $n{=}1.0$ (fewer
+    ghost modes), 67\% achieve dual convergence.  At $n{=}2.0$ (many ghost
+    modes), only 10\%---ghost eigenvalues reappear after continuing past
+    the initial $n_\text{neg}{=}0$.
+\end{enumerate}
+\end{tcolorbox}
+
+\subsection{Force floor: tighter thresholds}
+
+Can LJ forces go below the ${\sim}5 \times 10^{-5}$ floor observed in
+Section~\ref{sec:force-stats}?  Experiments at $n{=}2.0$ with stricter
+force thresholds:
+
+\begin{center}\small
+\begin{tabular}{l ccc}
+\toprule
+Metric & $\varepsilon{=}10^{-4}$ (standard) & $\varepsilon{=}10^{-5}$ & $\varepsilon{=}10^{-6}$ \\
+\midrule
+Converged       & 50 (100\%) & 25 (50\%) & 24 (48\%) \\
+Strict ($n_\text{neg}{=}0$)  & 6  & 23 & 24 \\
+Relaxed ($\bar{F} < \varepsilon$) & 44 & 2  & 0  \\
+Relaxed $\bar{F}$ median & $9.3 \times 10^{-5}$ & $9.5 \times 10^{-6}$ & --- \\
+Unconverged $\bar{F}$ min & --- & $4.2 \times 10^{-5}$ & $4.2 \times 10^{-5}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tcolorbox}[finding, title=Finding 6: LJ force floor is ${\sim}10^{-5}$\,eV/\AA]
+\begin{itemize}[nosep]
+  \item At $\varepsilon = 10^{-5}$, only 2/50 samples reach relaxed
+    convergence ($\bar{F} \sim 9.5 \times 10^{-6}$).
+    At $\varepsilon = 10^{-6}$, zero samples do.
+  \item Unconverged samples stall at $\bar{F} \approx 4.2 \times 10^{-5}$
+    at both thresholds---forces cannot penetrate below this floor.
+  \item Convergence drops from 100\% to 50\% at $\varepsilon = 10^{-5}$,
+    entirely from relaxed convergence failing.
+  \item The force floor is ${\sim}10^{-5}$\,eV/\AA{} (per-atom mean),
+    a topological property of the LJ PES.
+\end{itemize}
+\end{tcolorbox}
+
 % =============================================================================
 \section{LJ vs.\ DFTB0: Key Contrasts}
 \label{sec:comparison}
@@ -591,6 +885,26 @@ Hardest samples & \{106, 35, 178\} & \{136, 150, 209\} \\
 \end{enumerate}
 \end{tcolorbox}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{fig_steps_comparison.png}
+\caption{Convergence speed: LJ vs.\ DFTB0.  Box plots show LJ step
+  distributions; orange diamonds show DFTB0 medians.  LJ converges
+  3--14$\times$ faster in steps.}
+\label{fig:steps}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig_gain_decomposition.png}
+\caption{Gain decomposition: where do extra converged samples come from?
+  \textbf{Left (LJ):} the 50k step budget provides modest gains; kicks add
+  very little ($+$0.7\,pts at $n{=}2.0$).
+  \textbf{Right (DFTB0):} both 50k steps and kicks provide substantial gains,
+  especially at high noise ($+$12.2\,pts from kicks at $n{=}2.0$).}
+\label{fig:gains}
+\end{figure}
+
 % =============================================================================
 \section{Conclusions}
 \label{sec:conclusions}
@@ -611,6 +925,24 @@ Hardest samples & \{106, 35, 178\} & \{136, 150, 209\} \\
     (worst case $1.6 \times 10^{-3}$)---all well within
     $\sqrt{\varepsilon} = 0.01$.  A threshold of $5 \times 10^{-4}$
     would suffice for 96\% of samples.
+
+  \item \textbf{Ghost modes are permanent and early.}  100\% of LJ
+    trajectories develop ghost modes; at $n{=}0.5$, they appear when
+    forces are still ${\sim}0.6$\,eV/\AA.  No amount of further
+    optimization removes them.
+
+  \item \textbf{Force and eigenvalue convergence are mutually exclusive}
+    under standard convergence.  Zero samples achieve both
+    $n_\text{neg}{=}0$ and $\bar{F} < 10^{-4}$ at any trajectory point.
+    The force gate resolves this: 67\% dual convergence at $n{=}1.0$.
+
+  \item \textbf{The force gate works on LJ.}  Strict force quality
+    improves $73$--$75\times$; max $\bar{F}$ drops from $10^{-2}$ to
+    $10^{-4}$; convergence loss is only 2\,pts.
+
+  \item \textbf{LJ force floor is ${\sim}10^{-5}$\,eV/\AA.}  At
+    $\varepsilon = 10^{-5}$, convergence drops to 50\%.  At
+    $\varepsilon = 10^{-6}$, zero relaxed samples converge.
 
   \item \textbf{Ghost modes dominate LJ (67\%); oscillation dominates
     DFTB0 (8.2\%).}  Remaining challenges are PES-specific.
@@ -639,6 +971,10 @@ recommendations:
     strict samples have $\bar{F} \sim 5.5 \times 10^{-3}$\,eV/\AA{}
     ($50\times$ larger, because the optimizer stops at $n_\text{neg}{=}0$
     without a force check).
+  \item \textbf{Enable \texttt{--strict-force-gate} for LJ.}
+    At $n{=}1.0$: 67\% dual convergence, 2.1\,pt loss, $52\times$ force
+    quality improvement.  At $n{=}2.0$: 10\% dual convergence, 2.0\,pt
+    loss, $73\times$ force quality improvement.
   \item \textbf{For pairwise potentials}, strict convergence is not just
     hard to achieve---it is \emph{the wrong criterion}.  Ghost eigenvalues
     at $|\lambda| \sim 10^{-5}$\,eV/\AA$^2$ carry no physical significance.

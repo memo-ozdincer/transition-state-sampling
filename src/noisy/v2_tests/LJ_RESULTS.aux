@@ -1,0 +1,151 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why LJ?}{1}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Setup}{1}{section.2}\protected@file@percent }
+\newlabel{sec:setup}{{2}{1}{Setup}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Grid design}{1}{subsection.2.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces LJ v2 grid. All: $N{=}287$ Transition1x samples, seed\,=\,42, 48 workers $\times $ 4 threads.}}{1}{table.1}\protected@file@percent }
+\newlabel{tab:grid}{{1}{1}{LJ v2 grid. All: $N{=}287$ Transition1x samples, seed\,=\,42, 48 workers $\times $ 4 threads}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Convergence criteria}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Key parameters}{2}{subsection.2.3}\protected@file@percent }
+\newlabel{sec:params}{{2.3}{2}{Key parameters}{subsection.2.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Results}{2}{section.3}\protected@file@percent }
+\newlabel{sec:results}{{3}{2}{Results}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}The headline: strict convergence collapses on LJ}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Strict convergence ($n_\text  {neg}{=}0$) out of $N{=}287$. \color@box {}{warnlight}{\strut  Red shading} = below 50\%.}}{2}{table.2}\protected@file@percent }
+\newlabel{tab:lj-strict}{{2}{2}{Strict convergence ($n_\text {neg}{=}0$) out of $N{=}287$. \colorbox {warnlight}{\strut Red shading} = below 50\%}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}The real story: relaxed convergence is excellent}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Relaxed convergence ($\lambda _\text  {min} \geq -0.01$). \color@box {}{successlight}{\strut  Green shading} = above 97\%.}}{3}{table.3}\protected@file@percent }
+\newlabel{tab:lj-relaxed}{{3}{3}{Relaxed convergence ($\lambda _\text {min} \geq -0.01$). \colorbox {successlight}{\strut Green shading} = above 97\%}{table.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Strict vs.\ relaxed convergence rates. \textbf  {Left:} LJ shows a dramatic gap---strict collapses from 92\% to 7\% while relaxed stays above 95\%. \textbf  {Right:} DFTB0 shows no gap (strict $\approx $ relaxed) because ghost modes are absent.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:strict-vs-relaxed}{{1}{3}{Strict vs.\ relaxed convergence rates. \textbf {Left:} LJ shows a dramatic gap---strict collapses from 92\% to 7\% while relaxed stays above 95\%. \textbf {Right:} DFTB0 shows no gap (strict $\approx $ relaxed) because ghost modes are absent}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.2.1}Force convergence at the solution}{3}{subsubsection.3.2.1}\protected@file@percent }
+\newlabel{sec:force-stats}{{3.2.1}{3}{Force convergence at the solution}{subsubsection.3.2.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Force--eigenvalue anticorrelation.}{3}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Phase portrait.}{3}{section*.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Force norm $\bar  {F}$ at convergence (log scale). Green = strict-converged (no force check, $\bar  {F} \sim 5 \times 10^{-3}$); blue = relaxed-converged ($\bar  {F}$ tightly clustered below $10^{-4}$). Red dashed line = force threshold $\varepsilon = 10^{-4}$. Strict samples are ${\sim }50\times $ above threshold.}}{4}{figure.2}\protected@file@percent }
+\newlabel{fig:force-dist}{{2}{4}{Force norm $\bar {F}$ at convergence (log scale). Green = strict-converged (no force check, $\bar {F} \sim 5 \times 10^{-3}$); blue = relaxed-converged ($\bar {F}$ tightly clustered below $10^{-4}$). Red dashed line = force threshold $\varepsilon = 10^{-4}$. Strict samples are ${\sim }50\times $ above threshold}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}The strict--relaxed gap: the central diagnostic}{4}{subsection.3.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces The gap between strict and relaxed convergence. LJ's gap explodes with noise; DFTB0's is negligible.}}{4}{table.4}\protected@file@percent }
+\newlabel{tab:gap}{{4}{4}{The gap between strict and relaxed convergence. LJ's gap explodes with noise; DFTB0's is negligible}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Aggregate: LJ vs.\ DFTB0 v13}{4}{subsection.3.4}\protected@file@percent }
+\newlabel{sec:aggregate}{{3.4}{4}{Aggregate: LJ vs.\ DFTB0 v13}{subsection.3.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The strict--relaxed gap. LJ's gap explodes with noise (2.8$\to $92.7\,pts); DFTB0's is always ${\sim }$0. The gap is entirely due to ghost modes from LJ's missing angular terms.}}{5}{figure.3}\protected@file@percent }
+\newlabel{fig:gap}{{3}{5}{The strict--relaxed gap. LJ's gap explodes with noise (2.8$\to $92.7\,pts); DFTB0's is always ${\sim }$0. The gap is entirely due to ghost modes from LJ's missing angular terms}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Aggregate comparison (full v12b 50k, mean over 4 noise levels).}}{5}{table.5}\protected@file@percent }
+\newlabel{tab:aggregate}{{5}{5}{Aggregate comparison (full v12b 50k, mean over 4 noise levels)}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Why Strict Convergence Collapses: Ghost Modes}{5}{section.4}\protected@file@percent }
+\newlabel{sec:ghost}{{4}{5}{Why Strict Convergence Collapses: Ghost Modes}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}What are ghost modes?}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}The coin-flip collapse}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Distribution of $n_\text  {neg}$ (number of negative eigenvalues) at convergence. Green bars = strict ($n_\text  {neg}{=}0$). As noise increases, the distribution shifts right---at $n{=}2.0$, the median sample has $\sim $6 ghost eigenvalues, and only 19 of 285 land at $n_\text  {neg}{=}0$ by chance.}}{6}{figure.4}\protected@file@percent }
+\newlabel{fig:nneg}{{4}{6}{Distribution of $n_\text {neg}$ (number of negative eigenvalues) at convergence. Green bars = strict ($n_\text {neg}{=}0$). As noise increases, the distribution shifts right---at $n{=}2.0$, the median sample has $\sim $6 ghost eigenvalues, and only 19 of 285 land at $n_\text {neg}{=}0$ by chance}{figure.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Ghost modes appear from the very start}{6}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:ghost-onset}{{4.3}{6}{Ghost modes appear from the very start}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}How small are the ghost eigenvalues?}{7}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:eval-magnitudes}{{4.4}{7}{How small are the ghost eigenvalues?}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Eigenvalue magnitude distribution (relaxed-converged samples, full v12b 50k):}{7}{section*.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Distribution of $\qopname  \relax o{log}_{10}|\lambda _\text  {min}|$ at convergence. Blue = relaxed-converged samples (ghost modes, $\lambda < 0$); green = strict-converged ($\lambda > 0$). Ghost eigenvalues cluster at $|\lambda | \sim 10^{-5}$, far below any physically meaningful curvature.}}{7}{figure.5}\protected@file@percent }
+\newlabel{fig:eigenvalue-hist}{{5}{7}{Distribution of $\log _{10}|\lambda _\text {min}|$ at convergence. Blue = relaxed-converged samples (ghost modes, $\lambda < 0$); green = strict-converged ($\lambda > 0$). Ghost eigenvalues cluster at $|\lambda | \sim 10^{-5}$, far below any physically meaningful curvature}{figure.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{Number of ghost modes per sample:}{8}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Cascade: convergence vs.\ eigenvalue threshold.}{8}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{2D threshold sweep.}{8}{section*.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Cascade: convergence rate vs.\ eigenvalue threshold $\tau $. The steep rise from $\tau {=}0$ to $\tau {=}10^{-4}$ shows that most ghost modes have $|\lambda | < 10^{-4}$. The curve plateaus by $\tau {=}2 \times 10^{-3}$.}}{8}{figure.6}\protected@file@percent }
+\newlabel{fig:cascade}{{6}{8}{Cascade: convergence rate vs.\ eigenvalue threshold $\tau $. The steep rise from $\tau {=}0$ to $\tau {=}10^{-4}$ shows that most ghost modes have $|\lambda | < 10^{-4}$. The curve plateaus by $\tau {=}2 \times 10^{-3}$}{figure.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Hessian conditioning}{9}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:conditioning}{{4.5}{9}{Hessian conditioning}{subsection.4.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Hessian condition number $\kappa \approx |\lambda _\text  {max}|/|\lambda _\text  {min}|$ at convergence. $\kappa $ rises $1000\times $ from $n{=}0.5$ to $n{=}2.0$ because ghost eigenvalues ($|\lambda | \sim 10^{-5}$) enter the denominator. Despite $\kappa \sim 10^6$, RFO converges reliably.}}{9}{figure.7}\protected@file@percent }
+\newlabel{fig:conditioning}{{7}{9}{Hessian condition number $\kappa \approx |\lambda _\text {max}|/|\lambda _\text {min}|$ at convergence. $\kappa $ rises $1000\times $ from $n{=}0.5$ to $n{=}2.0$ because ghost eigenvalues ($|\lambda | \sim 10^{-5}$) enter the denominator. Despite $\kappa \sim 10^6$, RFO converges reliably}{figure.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Force and Eigenvalue Convergence Are Mutually Exclusive}{9}{section.5}\protected@file@percent }
+\newlabel{sec:mutual-exclusivity}{{5}{9}{Force and Eigenvalue Convergence Are Mutually Exclusive}{section.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{Force at eigenvalue convergence.}{10}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Phase 3: Force-Gated Convergence on LJ}{10}{section.6}\protected@file@percent }
+\newlabel{sec:force-gate}{{6}{10}{Phase 3: Force-Gated Convergence on LJ}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Code change (v14):}{10}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Force-gated strict convergence}{10}{subsection.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Force gate on LJ: 50-sample experiments at $n{=}2.0$ and $n{=}1.0$.}}{10}{table.6}\protected@file@percent }
+\newlabel{tab:force-gate}{{6}{10}{Force gate on LJ: 50-sample experiments at $n{=}2.0$ and $n{=}1.0$}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Force floor: tighter thresholds}{11}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}LJ vs.\ DFTB0: Key Contrasts}{11}{section.7}\protected@file@percent }
+\newlabel{sec:comparison}{{7}{11}{LJ vs.\ DFTB0: Key Contrasts}{section.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Side-by-side comparison (full v12b 50k).}}{12}{table.7}\protected@file@percent }
+\newlabel{tab:contrasts}{{7}{12}{Side-by-side comparison (full v12b 50k)}{table.7}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Convergence speed: LJ vs.\ DFTB0. Box plots show LJ step distributions; orange diamonds show DFTB0 medians. LJ converges 3--14$\times $ faster in steps.}}{12}{figure.8}\protected@file@percent }
+\newlabel{fig:steps}{{8}{12}{Convergence speed: LJ vs.\ DFTB0. Box plots show LJ step distributions; orange diamonds show DFTB0 medians. LJ converges 3--14$\times $ faster in steps}{figure.8}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Gain decomposition: where do extra converged samples come from? \textbf  {Left (LJ):} the 50k step budget provides modest gains; kicks add very little ($+$0.7\,pts at $n{=}2.0$). \textbf  {Right (DFTB0):} both 50k steps and kicks provide substantial gains, especially at high noise ($+$12.2\,pts from kicks at $n{=}2.0$).}}{13}{figure.9}\protected@file@percent }
+\newlabel{fig:gains}{{9}{13}{Gain decomposition: where do extra converged samples come from? \textbf {Left (LJ):} the 50k step budget provides modest gains; kicks add very little ($+$0.7\,pts at $n{=}2.0$). \textbf {Right (DFTB0):} both 50k steps and kicks provide substantial gains, especially at high noise ($+$12.2\,pts from kicks at $n{=}2.0$)}{figure.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusions}{13}{section.8}\protected@file@percent }
+\newlabel{sec:conclusions}{{8}{13}{Conclusions}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Implications for the optimizer}{14}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {A}Lennard-Jones Potential}{15}{appendix.A}\protected@file@percent }
+\newlabel{app:lj-potential}{{A}{15}{Lennard-Jones Potential}{appendix.A}{}}
+\newlabel{eq:lj}{{1}{15}{Lennard-Jones Potential}{equation.A.1}{}}
+\newlabel{eq:lj-deriv}{{2}{15}{Lennard-Jones Potential}{equation.A.2}{}}
+\newlabel{eq:lj-hess-rr}{{3}{15}{Lennard-Jones Potential}{equation.A.3}{}}
+\newlabel{eq:lj-hess-cart}{{4}{15}{Lennard-Jones Potential}{equation.A.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{UFF parameters and $\sigma $-scaling.}{15}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{What LJ lacks.}{15}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}The v12b Optimizer}{15}{appendix.B}\protected@file@percent }
+\newlabel{app:optimizer}{{B}{15}{The v12b Optimizer}{appendix.B}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}RFO step builder (v10b)}{15}{subsection.B.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Trust region and displacement capping}{16}{subsection.B.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.3}Polynomial line search (v10c)}{16}{subsection.B.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.4}Eckart projection}{16}{subsection.B.4}\protected@file@percent }
+\newlabel{app:eckart}{{B.4}{16}{Eckart projection}{subsection.B.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.5}Kick mechanisms (v12/v12b)}{16}{subsection.B.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{1.\ Oscillation kick (v12).}{16}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{2.\ Blind-mode kick with probe (v12b).}{16}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{3.\ Late escape (v12b).}{16}{section*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Adaptive kick scaling (v12b).}{16}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {C}Starting Geometries and Noise Model}{16}{appendix.C}\protected@file@percent }
+\newlabel{app:noise}{{C}{16}{Starting Geometries and Noise Model}{appendix.C}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Full Parameter Table}{17}{appendix.D}\protected@file@percent }
+\newlabel{app:params}{{D}{17}{Full Parameter Table}{appendix.D}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {E}Cascade Tables}{17}{appendix.E}\protected@file@percent }
+\newlabel{app:cascade}{{E}{17}{Cascade Tables}{appendix.E}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Cascade: converged at each eigenvalue threshold (full v12b 50k and baselines).}}{17}{table.8}\protected@file@percent }
+\newlabel{tab:cascade}{{8}{17}{Cascade: converged at each eigenvalue threshold (full v12b 50k and baselines)}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {F}Step Distributions and Computational Cost}{17}{appendix.F}\protected@file@percent }
+\newlabel{app:steps}{{F}{17}{Step Distributions and Computational Cost}{appendix.F}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {G}Gain Decomposition}{17}{appendix.G}\protected@file@percent }
+\newlabel{app:gains}{{G}{17}{Gain Decomposition}{appendix.G}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Step and wall-time distributions (non-error samples).}}{18}{table.9}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Median steps and wall time: LJ vs.\ DFTB0 (full v12b 50k).}}{18}{table.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {H}Failure Eigenvalue Spectra}{18}{appendix.H}\protected@file@percent }
+\newlabel{app:failures}{{H}{18}{Failure Eigenvalue Spectra}{appendix.H}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.1}Error counts}{18}{subsection.H.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.2}$n{=}0.5$: mild ghost modes}{18}{subsection.H.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.3}$n{=}1.0$: single-mode failures}{18}{subsection.H.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.4}$n{=}1.5$: multi-mode cascade}{18}{subsection.H.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Gain decomposition (strict): LJ vs.\ DFTB0 v13.}}{19}{table.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {H.5}$n{=}2.0$: ghost mode dominance}{19}{subsection.H.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {I}Ablation Results at $n{=}2.0$}{19}{appendix.I}\protected@file@percent }
+\newlabel{app:ablations}{{I}{19}{Ablation Results at $n{=}2.0$}{appendix.I}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Ablations at $n{=}2.0$\,\r A. Converged includes relaxed-accept.}}{19}{table.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {J}Hardest Samples}{19}{appendix.J}\protected@file@percent }
+\newlabel{app:hardest}{{J}{19}{Hardest Samples}{appendix.J}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {K}Theoretical Discussion}{19}{appendix.K}\protected@file@percent }
+\newlabel{app:theory}{{K}{19}{Theoretical Discussion}{appendix.K}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {K.1}Validation of the $\varepsilon ^{1/2}$ theorem}{19}{subsection.K.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {K.2}Pairwise rank deficiency}{20}{subsection.K.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {K.3}Cascade gap scaling}{20}{subsection.K.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {L}Known Issues}{20}{appendix.L}\protected@file@percent }
+\newlabel{app:issues}{{L}{20}{Known Issues}{appendix.L}{}}
+\gdef \@abspage@last{20}

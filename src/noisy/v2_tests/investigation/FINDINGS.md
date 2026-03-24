@@ -858,6 +858,50 @@ force-gate on LJ, eigenvalue-only on DFTB0.
 
 ---
 
+## Phase 3E: 300-Sample DFTB0 Confirmation (In Progress)
+
+### Goal
+Replicate Phase 3A/3D findings with 300 samples per configuration for statistical
+power. Six configurations: {control, forcegate+kicks, forcegate-nokicks} × {n=2.0, n=1.0}.
+
+### Data
+Location: `/scratch/memoozd/ts-tools-scratch/runs/phase3_300s/`
+SLURM job 1227813 queued (nodes in maintenance). Also running on login node.
+
+### Preliminary Results (partial data, 2024-03-24)
+
+Available data: control_n2.0 (26 samples), control_n1.0 (53 samples).
+Force-gate experiments: only 2 samples each (too slow on login node for statistics).
+
+**Control experiments (no force gate, with kicks):**
+
+| Metric | control_n2.0 (N=26) | control_n1.0 (N=53) |
+|--------|---------------------|---------------------|
+| Strict converged | 24/26 (92.3%) | 53/53 (100%) |
+| |F| at first n_neg=0 (median) | 7.16e-2 | 7.46e-2 |
+| |F| < 1e-4 at n_neg=0 | **0/24 (0%)** | **0/53 (0%)** |
+| |F| < 1e-2 at n_neg=0 | **0/24 (0%)** | **0/53 (0%)** |
+| Steps to n_neg=0 (median) | 4608 | 1960 |
+| Final |F| median | 6.90e-2 | 7.46e-2 |
+| κ median | 8.3 × 10^6 | 1.5 × 10^6 |
+
+**Key finding:** Across 77 DFTB0 control samples, **zero** achieve |F| < 1e-2 when
+n_neg first reaches 0. The median force at strict convergence is 750× above the
+1e-4 threshold. This confirms Phase 1 findings with higher sample count: DFTB0 strict
+convergence occurs at geometries far from force-converged.
+
+**Force-gate experiments (N=2 each, preliminary only):**
+- All 8 samples timed out at 50k steps (NONE converged)
+- Final forces: 2e-2 to 7.5e-2 (consistent with Phase 3A)
+- forcegate_nokicks_n2.0: both samples had cascade n_neg=0 at thr≥1e-3
+  (eigenvalues barely negative, threshold filtering would recover them)
+
+### Status
+Experiments restarted 2024-03-24. Controls expected to complete in ~6h (login node).
+Force-gate experiments need SLURM nodes (~75h per experiment at 2 workers).
+
+---
+
 ## File Index
 
 ### Analysis scripts
@@ -886,6 +930,9 @@ force-gate on LJ, eigenvalue-only on DFTB0.
   - `3B_lj_n{1.0,2.0}_{control,forcegate}/` — LJ force-gate experiments
   - `3C_lj_n2.0_fc{1e-5,1e-6}/` — LJ tight force threshold experiments
   - `3D_dftb_n{1.0,2.0}_forcegate_nokicks/` — No-kicks control experiments
+- Phase 3E (300-sample): `/scratch/memoozd/ts-tools-scratch/runs/phase3_300s/`
+  - `{control,forcegate_kicks,forcegate_nokicks}_n{1.0,2.0}/` — 6 configurations
+  - Runner: `run_phase3_300samples.sh` (project root)
 
 ### Plots (Phase 1)
 - `threshold_sweep_heatmap.png` — 2D force×eigenvalue convergence rates
